@@ -1,0 +1,9 @@
+node_modules
+dist
+.env.local
+.env.*.local
+*.log
+npm-install.txt
+tsc-out.txt
+build-out.txt
+.DS_Store

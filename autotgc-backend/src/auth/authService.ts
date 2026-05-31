@@ -1,0 +1,165 @@
+/**
+ * AuthService — registration, login (with lockout), refresh, logout.
+ * Wires pure validation + password hashing + JwtService against Prisma.
+ * Foundation Req 1, 2, 4.
+ */
+import type { PrismaClient, UserAccount } from '@prisma/client';
+import type { JwtService, Role, TokenPair } from './jwt';
+import { hashPassword, verifyPassword } from './password';
+import { validateLoginShape, validateRegistration } from './validation';
+import type { RegisterInput } from './validation';
+import {
+  ConflictError,
+  LockedError,
+  UnauthorizedError,
+  ValidationError,
+} from '../infra/errors';
+
+export interface PublicUser {
+  id: string;
+  username: string;
+  email: string;
+  role: Role;
+}
+
+export interface AuthResult {
+  user: PublicUser;
+  tokens: TokenPair;
+}
+
+function toPublicUser(u: UserAccount): PublicUser {
+  return { id: u.id, username: u.username, email: u.email, role: u.role as Role };
+}
+
+export class AuthService {
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly jwt: JwtService,
+    private readonly lockoutThreshold: number,
+    private readonly accessTtlHours = 24,
+    private readonly refreshTtlDays = 30,
+  ) {}
+
+  private expiries(now: Date): { accessExpiresAt: Date; refreshExpiresAt: Date } {
+    return {
+      accessExpiresAt: new Date(now.getTime() + this.accessTtlHours * 3600 * 1000),
+      refreshExpiresAt: new Date(now.getTime() + this.refreshTtlDays * 86400 * 1000),
+    };
+  }
+
+  private async createSession(userId: string): Promise<string> {
+    const now = new Date();
+    const { accessExpiresAt, refreshExpiresAt } = this.expiries(now);
+    const session = await this.prisma.jwtSession.create({
+      data: { userId, status: 'ACTIVE', accessExpiresAt, refreshExpiresAt },
+    });
+    return session.sessionId;
+  }
+
+  async register(input: RegisterInput): Promise<AuthResult> {
+    const validation = validateRegistration(input);
+    if (!validation.ok) {
+      throw new ValidationError(validation.message, validation.code);
+    }
+
+    const username = (input.username ?? '').trim();
+    const existing = await this.prisma.userAccount.findUnique({ where: { username } });
+    if (existing) {
+      throw new ConflictError('Username already exists', 'USERNAME_TAKEN');
+    }
+
+    const passwordHash = await hashPassword(input.password ?? '');
+    const user = await this.prisma.userAccount.create({
+      data: {
+        username,
+        email: input.email ?? '',
+        passwordHash,
+        role: 'ADMIN',
+      },
+    });
+
+    const sessionId = await this.createSession(user.id);
+    const tokens = await this.jwt.issuePair(user.id, user.role as Role, sessionId);
+    return { user: toPublicUser(user), tokens };
+  }
+
+  async login(username?: string, password?: string): Promise<AuthResult> {
+    const validation = validateLoginShape({ username, password });
+    if (!validation.ok) {
+      throw new ValidationError(validation.message, validation.code);
+    }
+
+    const user = await this.prisma.userAccount.findUnique({
+      where: { username: username as string },
+    });
+    // Unknown user: 401, no counter to change.
+    if (!user) {
+      throw new UnauthorizedError('Invalid credentials');
+    }
+
+    // Locked account: 423 regardless of password correctness.
+    if (user.locked) {
+      throw new LockedError();
+    }
+
+    const ok = await verifyPassword(user.passwordHash, password as string);
+    if (!ok) {
+      const nextCount = user.failedLoginCount + 1;
+      const shouldLock = nextCount >= this.lockoutThreshold;
+      await this.prisma.userAccount.update({
+        where: { id: user.id },
+        data: {
+          failedLoginCount: nextCount,
+          locked: shouldLock,
+          lockedAt: shouldLock ? new Date() : null,
+        },
+      });
+      throw new UnauthorizedError('Invalid credentials');
+    }
+
+    // Success: reset counter, issue a fresh session + token pair.
+    if (user.failedLoginCount !== 0) {
+      await this.prisma.userAccount.update({
+        where: { id: user.id },
+        data: { failedLoginCount: 0 },
+      });
+    }
+
+    const sessionId = await this.createSession(user.id);
+    const tokens = await this.jwt.issuePair(user.id, user.role as Role, sessionId);
+    return { user: toPublicUser(user), tokens };
+  }
+
+  async refresh(refreshToken: string): Promise<{ accessToken: string }> {
+    let claims;
+    try {
+      claims = await this.jwt.verify(refreshToken, 'refresh');
+    } catch {
+      throw new UnauthorizedError('Invalid refresh token');
+    }
+
+    const session = await this.prisma.jwtSession.findUnique({
+      where: { sessionId: claims.sid },
+    });
+    if (!session || session.status !== 'ACTIVE' || session.revokedAt !== null) {
+      throw new UnauthorizedError('Session is not active');
+    }
+
+    const accessToken = await this.jwt.issueAccess(claims.sub, claims.role, claims.sid);
+    return { accessToken };
+  }
+
+  async logout(accessToken: string): Promise<void> {
+    let claims;
+    try {
+      claims = await this.jwt.verify(accessToken, 'access');
+    } catch {
+      throw new UnauthorizedError('Invalid token');
+    }
+
+    await this.prisma.jwtSession.updateMany({
+      where: { sessionId: claims.sid, status: 'ACTIVE' },
+      data: { status: 'REVOKED', revokedAt: new Date() },
+    });
+  }
+}

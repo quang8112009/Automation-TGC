@@ -1,0 +1,202 @@
+/**
+ * buildApp — assembles a configured Fastify instance:
+ * CORS, global error handler (AppError -> status, else 500), 404 handler, and
+ * registration of every module's routes (foundation/leads/dashboard, platform
+ * tokens, content pipeline, analytics & feedback loop).
+ */
+import Fastify from 'fastify';
+import type { FastifyInstance } from 'fastify';
+import cors from '@fastify/cors';
+import type { PrismaClient } from '@prisma/client';
+import type { AppConfig } from './infra/config';
+import type { JwtService } from './auth/jwt';
+import type { SecretLoader } from './infra/secrets';
+import { toErrorBody } from './infra/errors';
+import { registerRoutes } from './routes';
+import type { ComposedServices } from './infra/services';
+import { registerPlatformTokenRoutes } from './platforms/routes';
+import { registerContentRoutes } from './content/routes';
+import { registerAnalyticsRoutes } from './analytics/routes';
+import { registerSecurity } from './http/security';
+import { registerRequestId } from './http/requestId';
+import type { RequestLogger } from './http/requestId';
+import { registerReadiness } from './http/readiness';
+import { registerApiDocs } from './http/apiDocs';
+import { registerApiInfo } from './http/apiInfo';
+import { registerRealtime } from './realtime';
+import { registerOrchestrationRoutes } from './orchestration/routes';
+import { registerRecruitmentAgentRoutes } from './recruitment/agent/routes';
+import { registerRecruitmentRoutes } from './recruitment/routes';
+import { registerMarketingPlanningRoutes } from './marketing/planning/routes';
+import { registerMultiFormatRoutes } from './marketing/content/routes';
+import { registerAssetRoutes } from './marketing/assets/routes';
+import { registerAssetRenderRoutes } from './marketing/assets/renderRoutes';
+import { registerAutopilotRoutes } from './marketing/autopilot/routes';
+import { KnowledgeBrandProvider } from './marketing/brandKnowledge';
+import { KnowledgeService } from './recruitment/knowledge/knowledgeService';
+import { GenerationService, PrismaAiPromptContextReader } from './content/generationService';
+import { SchedulingService } from './content/schedulingService';
+
+export interface AppDeps {
+  prisma: PrismaClient;
+  jwt: JwtService;
+  redact: SecretLoader['redact'];
+  services: ComposedServices;
+  /** Logger for HTTP access logging (optional). */
+  logger?: RequestLogger;
+}
+
+export async function buildApp(config: AppConfig, deps: AppDeps): Promise<FastifyInstance> {
+  const app = Fastify({
+    logger: false,
+    bodyLimit: 8_388_608, // 8 MB to accommodate base64 media uploads
+  });
+
+  // Security headers + rate limiting (Redis-backed when available) — first.
+  await registerSecurity(app, { rateLimitRedisUrl: config.redisUrl });
+
+  // Request correlation id + structured access logging.
+  registerRequestId(app, deps.logger);
+
+  await app.register(cors, {
+    origin: config.frontendOrigin === '*' ? true : config.frontendOrigin,
+    credentials: true,
+  });
+
+  // OpenAPI docs (introspects routes registered after this).
+  await registerApiDocs(app);
+
+  // Readiness probe (DB + Redis).
+  registerReadiness(app, { redisUrl: config.redisUrl });
+
+  // Global error handler: AppError carries its own allowed status; anything else -> 500.
+  app.setErrorHandler((err, _request, reply) => {
+    const anyErr = err as { statusCode?: number; code?: string; name?: string };
+    // Plugin-originated errors (e.g. @fastify/rate-limit -> 429, body-parse -> 400)
+    // carry their own statusCode; honor any non-5xx the plugin set.
+    const pluginStatus = typeof anyErr.statusCode === 'number' ? anyErr.statusCode : undefined;
+    if (pluginStatus && pluginStatus >= 400 && pluginStatus < 500) {
+      const code =
+        pluginStatus === 429
+          ? 'RATE_LIMITED'
+          : typeof anyErr.code === 'string' && anyErr.code.length > 0
+            ? anyErr.code
+            : 'BAD_REQUEST';
+      const msg = err instanceof Error ? err.message : 'Request rejected';
+      reply.code(pluginStatus).send({ error: { code, message: deps.redact(msg) } });
+      return;
+    }
+    const { status, body } = toErrorBody(err, deps.redact);
+    reply.code(status).send(body);
+  });
+
+  app.setNotFoundHandler((_request, reply) => {
+    reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
+  });
+
+  const { registry, tokenManager, alerts, gemini, mediaService, eventBus, mediaRenderProvider } =
+    deps.services;
+
+  // --- Register routes (foundation/leads/dashboard first) --------------------
+  await registerRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, config, eventBus });
+  registerPlatformTokenRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, config, tokenManager });
+  await registerContentRoutes(app, {
+    prisma: deps.prisma,
+    jwt: deps.jwt,
+    config,
+    gemini,
+    registry,
+    tokenManager,
+    alerts,
+    mediaService,
+    eventBus,
+  });
+  await registerAnalyticsRoutes(app, {
+    prisma: deps.prisma,
+    jwt: deps.jwt,
+    config,
+    gemini,
+    registry,
+    tokenManager,
+    alerts,
+    eventBus,
+  });
+
+  // Public API manifest / gateway info (/api/v1).
+  registerApiInfo(app);
+
+  // Real-time transports (SSE + WebSocket), fed by the shared event bus. They
+  // authenticate via a query-string token (see REALTIME_PUBLIC_PATHS).
+  await registerRealtime(app, { jwt: deps.jwt, prisma: deps.prisma, eventBus });
+
+  // Agentic orchestration routes (/api/v1/workflows). The generation and
+  // scheduling services are wired from the shared composition so the content
+  // pipeline steps produce real drafts / schedule real posts.
+  const generationService = new GenerationService(
+    deps.prisma,
+    gemini,
+    new PrismaAiPromptContextReader(deps.prisma),
+  );
+  const schedulingService = new SchedulingService(
+    deps.prisma,
+    mediaService,
+    undefined,
+    eventBus,
+  );
+  registerOrchestrationRoutes(app, {
+    prisma: deps.prisma,
+    jwt: deps.jwt,
+    eventBus,
+    generationService,
+    schedulingService,
+  });
+
+  // AI recruitment-consultant agent + knowledge base (/api/v1/ai, /api/v1/knowledge).
+  // Gemini-optional: when no key is configured the agent returns grounded fallbacks.
+  registerRecruitmentAgentRoutes(app, {
+    prisma: deps.prisma,
+    jwt: deps.jwt,
+    gemini,
+  });
+
+  // Recruitment CRM (labor-export / XKLĐ): job orders + candidate pipeline.
+  await registerRecruitmentRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, eventBus });
+
+  // AI marketing autopilot:
+  //  - trend research + per-market content planning (/api/v1/trends, /content-plans)
+  //  - multi-format content generation (/api/v1/generation/multi-format)
+  //  - brand-template visual/video asset generation (/api/v1/assets, /brand-templates)
+  //
+  // Ground EVERY marketing AI generator in the Thanh Giang knowledge base (the
+  // same curated KB the recruitment consultant uses), so all AI output is
+  // factually on-brand. ONE shared provider is built here and threaded into the
+  // content / planning / autopilot registrars. The grounding is optional and
+  // non-breaking inside each generator (degrades to a company-identity line).
+  const brandKnowledge = new KnowledgeBrandProvider(new KnowledgeService(deps.prisma));
+  registerMarketingPlanningRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini, brandKnowledge });
+  registerMultiFormatRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini, brandKnowledge });
+  registerAssetRoutes(app, {
+    prisma: deps.prisma,
+    jwt: deps.jwt,
+    renderProvider: mediaRenderProvider,
+  });
+  // On-demand render trigger: POST /api/v1/assets/:id/render (call khi có lệnh
+  // tạo ảnh). 502 when no provider is wired; RENDERED/FAILED otherwise.
+  registerAssetRenderRoutes(app, {
+    prisma: deps.prisma,
+    jwt: deps.jwt,
+    renderProvider: mediaRenderProvider,
+  });
+  // Autopilot: the end-to-end data-driven loop (research → plan → generate →
+  // assets → human review gate → schedule → summary).
+  registerAutopilotRoutes(app, {
+    prisma: deps.prisma,
+    jwt: deps.jwt,
+    eventBus,
+    gemini,
+    renderProvider: mediaRenderProvider,
+    brandKnowledge,
+  });
+
+  return app;
+}
