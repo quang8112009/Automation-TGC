@@ -973,26 +973,7 @@ export interface VisaAdvice {
   aiGenerated: boolean;
 }
 
-// ---- Study-abroad: Document OCR, Scholarship, Follow-up --------------------
-
-export type DocExtractionStatus = 'PENDING' | 'EXTRACTED' | 'VERIFIED' | 'FAILED' | 'NEEDS_RESEND';
-
-export interface DocumentExtraction {
-  id: string;
-  candidateId: string;
-  checklistItemId: string | null;
-  docType: string;
-  status: DocExtractionStatus;
-  storageKey: string;
-  extractedFields: Record<string, unknown>;
-  confidence: number;
-  issues: string[];
-  rawText: string;
-  provider: string;
-  verifiedAgainst: unknown;
-  createdAt: string;
-  updatedAt: string;
-}
+// ---- Study-abroad: Scholarship, Follow-up ----------------------------------
 
 export interface ScholarshipResult {
   programId: string;

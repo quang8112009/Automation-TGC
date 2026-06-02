@@ -4,38 +4,10 @@
  */
 import { api } from '../lib/apiClient';
 import type {
-  DocumentExtraction,
   FollowUpListResult,
   FollowUpTask,
   ScholarshipSuggestionsResult,
 } from '../lib/types';
-
-// ---- Document OCR & verification -------------------------------------------
-
-export interface SubmitDocInput {
-  candidateId: string;
-  checklistItemId?: string;
-  docType: string;
-  rawText?: string;
-  imageBase64?: string;
-  mimeType?: string;
-  requirement?: {
-    minScore?: number;
-    minGpa?: number;
-    minAmountVndM?: number;
-    asOf?: string;
-  };
-}
-
-export function submitDocExtraction(input: SubmitDocInput): Promise<DocumentExtraction> {
-  return api.post<DocumentExtraction>('/api/v1/doc-extractions', input);
-}
-
-export function listDocExtractions(candidateId: string): Promise<{ items: DocumentExtraction[] }> {
-  return api.get<{ items: DocumentExtraction[] }>(
-    `/api/v1/candidates/${encodeURIComponent(candidateId)}/doc-extractions`,
-  );
-}
 
 // ---- Scholarship / financial matching --------------------------------------
 

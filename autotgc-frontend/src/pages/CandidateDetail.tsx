@@ -1,5 +1,5 @@
-/**
- * CandidateDetail (/candidates/:id) — full candidate profile + stage-history
+﻿/**
+ * CandidateDetail (/candidates/:id) â€” full candidate profile + stage-history
  * timeline, with controls to:
  *   - advance the stage (PUT { stage }; only legal next stages are offered),
  *   - match the candidate to an OPEN job order (POST /match),
@@ -8,7 +8,7 @@
  *
  * AI grounding note: the suggest/draft endpoints return `aiGenerated`. When it
  * is false the result is a deterministic, knowledge-grounded answer (no Gemini
- * call) — we surface this clearly as "Trả lời dựa trên cơ sở tri thức", never
+ * call) â€” we surface this clearly as "Tráº£ lá»i dá»±a trÃªn cÆ¡ sá»Ÿ tri thá»©c", never
  * as a failure.
  */
 import { useState } from 'react';
@@ -32,15 +32,8 @@ import type {
 } from '../api/recruitment';
 import { aiDraftOutreach, aiSuggestJobOrders, aiConsult } from '../api/aiConsultant';
 import { getDestinationSuggestions } from '../api/partners';
-import {
-  getScholarshipSuggestions,
-  listDocExtractions,
-  submitDocExtraction,
-} from '../api/studyAbroad';
-import type {
-  DocumentExtraction,
-  ScholarshipResult,
-} from '../lib/types';
+import { getScholarshipSuggestions } from '../api/studyAbroad';
+import type { ScholarshipResult } from '../lib/types';
 import {
   createVisaCase,
   generateLogistics,
@@ -94,26 +87,26 @@ export function CandidateDetail() {
   });
 
   function confirmDelete() {
-    if (window.confirm('Xóa ứng viên này? Hành động không thể hoàn tác.')) {
+    if (window.confirm('XÃ³a á»©ng viÃªn nÃ y? HÃ nh Ä‘á»™ng khÃ´ng thá»ƒ hoÃ n tÃ¡c.')) {
       deleteMutation.mutate();
     }
   }
 
   if (id.length === 0) {
-    return <Empty label="Thiếu mã ứng viên." />;
+    return <Empty label="Thiáº¿u mÃ£ á»©ng viÃªn." />;
   }
 
   return (
     <div className="reveal">
       <div className="page-header">
         <div>
-          <div className="eyebrow">CRM tuyển dụng</div>
-          <h1 className="page-title">Hồ sơ ứng viên</h1>
+          <div className="eyebrow">CRM tuyá»ƒn dá»¥ng</div>
+          <h1 className="page-title">Há»“ sÆ¡ á»©ng viÃªn</h1>
         </div>
         <div className="row-actions">
           <button className="btn btn-sm" onClick={() => navigate('/candidates')}>
             <Icon name="arrow-left" size={16} />
-            Danh sách
+            Danh sÃ¡ch
           </button>
           {isAdmin && (
             <button
@@ -121,7 +114,7 @@ export function CandidateDetail() {
               disabled={deleteMutation.isPending}
               onClick={confirmDelete}
             >
-              Xóa
+              XÃ³a
             </button>
           )}
         </div>
@@ -130,7 +123,7 @@ export function CandidateDetail() {
       {deleteMutation.error != null && <ErrorMessage error={deleteMutation.error} />}
 
       {candidateQuery.isLoading ? (
-        <Loading label="Đang tải…" />
+        <Loading label="Äang táº£iâ€¦" />
       ) : candidateQuery.error ? (
         <ErrorMessage error={candidateQuery.error} />
       ) : candidateQuery.data ? (
@@ -161,12 +154,11 @@ export function CandidateDetail() {
             <DestinationSuggestionsPanel candidateId={id} />
             <ScholarshipPanel candidateId={id} />
             <VisaCasesPanel candidateId={id} desiredMarket={candidateQuery.data.desiredMarket} />
-            <DocExtractionPanel candidateId={id} />
             <DocumentChecklistPanel candidateId={id} desiredMarket={candidateQuery.data.desiredMarket} />
           </div>
         </div>
       ) : (
-        <Empty label="Không tìm thấy ứng viên." />
+        <Empty label="KhÃ´ng tÃ¬m tháº¥y á»©ng viÃªn." />
       )}
     </div>
   );
@@ -179,37 +171,37 @@ function ProfileCard({ candidate }: { candidate: CandidateDetailType }) {
         {candidate.fullName} <StageBadge stage={candidate.stage} />
       </h2>
       <dl className="kv">
-        <dt>Điện thoại</dt>
-        <dd>{candidate.phone ?? '—'}</dd>
+        <dt>Äiá»‡n thoáº¡i</dt>
+        <dd>{candidate.phone ?? 'â€”'}</dd>
         <dt>Email</dt>
-        <dd>{candidate.email ?? '—'}</dd>
-        <dt>Ngày sinh</dt>
-        <dd>{candidate.dob ? formatDate(candidate.dob) : '—'}</dd>
-        <dt>Giới tính</dt>
-        <dd>{candidate.gender || '—'}</dd>
-        <dt>Quê quán</dt>
-        <dd>{candidate.hometown || '—'}</dd>
-        <dt>Học vấn</dt>
-        <dd>{candidate.education || '—'}</dd>
-        <dt>Công việc hiện tại</dt>
-        <dd>{candidate.currentJob || '—'}</dd>
-        <dt>Thị trường mong muốn</dt>
+        <dd>{candidate.email ?? 'â€”'}</dd>
+        <dt>NgÃ y sinh</dt>
+        <dd>{candidate.dob ? formatDate(candidate.dob) : 'â€”'}</dd>
+        <dt>Giá»›i tÃ­nh</dt>
+        <dd>{candidate.gender || 'â€”'}</dd>
+        <dt>QuÃª quÃ¡n</dt>
+        <dd>{candidate.hometown || 'â€”'}</dd>
+        <dt>Há»c váº¥n</dt>
+        <dd>{candidate.education || 'â€”'}</dd>
+        <dt>CÃ´ng viá»‡c hiá»‡n táº¡i</dt>
+        <dd>{candidate.currentJob || 'â€”'}</dd>
+        <dt>Thá»‹ trÆ°á»ng mong muá»‘n</dt>
         <dd>{marketLabel(candidate.desiredMarket)}</dd>
-        <dt>Diện visa mong muốn</dt>
+        <dt>Diá»‡n visa mong muá»‘n</dt>
         <dd>{visaTypeLabel(candidate.desiredVisaType)}</dd>
-        <dt>Ngành mong muốn</dt>
-        <dd>{candidate.desiredIndustry || '—'}</dd>
-        <dt>Trình độ tiếng Nhật</dt>
-        <dd>{candidate.japaneseLevel || '—'}</dd>
-        <dt>Ngoại ngữ khác</dt>
-        <dd>{candidate.otherLanguage || '—'}</dd>
-        <dt>Nguồn</dt>
-        <dd>{candidate.source || '—'}</dd>
-        <dt>Người phụ trách</dt>
-        <dd>{candidate.assignedTo ?? '—'}</dd>
-        <dt>Ghi chú</dt>
-        <dd>{candidate.note ?? '—'}</dd>
-        <dt>Ngày tạo</dt>
+        <dt>NgÃ nh mong muá»‘n</dt>
+        <dd>{candidate.desiredIndustry || 'â€”'}</dd>
+        <dt>TrÃ¬nh Ä‘á»™ tiáº¿ng Nháº­t</dt>
+        <dd>{candidate.japaneseLevel || 'â€”'}</dd>
+        <dt>Ngoáº¡i ngá»¯ khÃ¡c</dt>
+        <dd>{candidate.otherLanguage || 'â€”'}</dd>
+        <dt>Nguá»“n</dt>
+        <dd>{candidate.source || 'â€”'}</dd>
+        <dt>NgÆ°á»i phá»¥ trÃ¡ch</dt>
+        <dd>{candidate.assignedTo ?? 'â€”'}</dd>
+        <dt>Ghi chÃº</dt>
+        <dd>{candidate.note ?? 'â€”'}</dd>
+        <dt>NgÃ y táº¡o</dt>
         <dd>{formatDate(candidate.createdAt)}</dd>
       </dl>
     </div>
@@ -233,7 +225,7 @@ function StageControls({
   const mutation = useMutation({
     mutationFn: () => updateCandidate(candidateId, { stage: target, note: note || null }),
     onSuccess: () => {
-      setMessage(`Đã chuyển sang giai đoạn "${candidateStageLabel(target)}".`);
+      setMessage(`ÄÃ£ chuyá»ƒn sang giai Ä‘oáº¡n "${candidateStageLabel(target)}".`);
       setTarget('');
       setNote('');
       onChanged();
@@ -242,21 +234,21 @@ function StageControls({
 
   return (
     <div className="card">
-      <h2 className="card-title">Chuyển giai đoạn</h2>
+      <h2 className="card-title">Chuyá»ƒn giai Ä‘oáº¡n</h2>
       <div className="muted" style={{ marginBottom: 10 }}>
-        Giai đoạn hiện tại: <strong>{candidateStageLabel(currentStage)}</strong>. Hệ thống chỉ cho
-        phép các bước hợp lệ (server từ chối bước sai với mã 409).
+        Giai Ä‘oáº¡n hiá»‡n táº¡i: <strong>{candidateStageLabel(currentStage)}</strong>. Há»‡ thá»‘ng chá»‰ cho
+        phÃ©p cÃ¡c bÆ°á»›c há»£p lá»‡ (server tá»« chá»‘i bÆ°á»›c sai vá»›i mÃ£ 409).
       </div>
       {message && <SuccessMessage>{message}</SuccessMessage>}
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
       {nextStages.length === 0 ? (
-        <div className="muted">Đây là giai đoạn kết thúc — không thể chuyển tiếp.</div>
+        <div className="muted">ÄÃ¢y lÃ  giai Ä‘oáº¡n káº¿t thÃºc â€” khÃ´ng thá»ƒ chuyá»ƒn tiáº¿p.</div>
       ) : (
         <>
           <div className="field">
-            <label>Giai đoạn mới</label>
+            <label>Giai Ä‘oáº¡n má»›i</label>
             <select value={target} onChange={(e) => setTarget(e.target.value)}>
-              <option value="">— Chọn —</option>
+              <option value="">â€” Chá»n â€”</option>
               {nextStages.map((s) => (
                 <option key={s} value={s}>
                   {candidateStageLabel(s)}
@@ -265,7 +257,7 @@ function StageControls({
             </select>
           </div>
           <div className="field">
-            <label>Ghi chú (tùy chọn)</label>
+            <label>Ghi chÃº (tÃ¹y chá»n)</label>
             <input value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
           <button
@@ -276,7 +268,7 @@ function StageControls({
               mutation.mutate();
             }}
           >
-            {mutation.isPending ? 'Đang chuyển…' : 'Chuyển giai đoạn'}
+            {mutation.isPending ? 'Äang chuyá»ƒnâ€¦' : 'Chuyá»ƒn giai Ä‘oáº¡n'}
           </button>
         </>
       )}
@@ -304,7 +296,7 @@ function MatchPanel({
   const mutation = useMutation({
     mutationFn: () => matchCandidate(candidateId, selected),
     onSuccess: () => {
-      setMessage('Đã ghép ứng viên với đơn hàng (giai đoạn chuyển sang Đã ghép đơn).');
+      setMessage('ÄÃ£ ghÃ©p á»©ng viÃªn vá»›i Ä‘Æ¡n hÃ ng (giai Ä‘oáº¡n chuyá»ƒn sang ÄÃ£ ghÃ©p Ä‘Æ¡n).');
       setSelected('');
       onMatched();
     },
@@ -312,27 +304,27 @@ function MatchPanel({
 
   return (
     <div className="card">
-      <h2 className="card-title">Ghép đơn hàng</h2>
+      <h2 className="card-title">GhÃ©p Ä‘Æ¡n hÃ ng</h2>
       {matchedJobOrderId && (
         <div className="muted" style={{ marginBottom: 10 }}>
-          Đơn hàng đã ghép hiện tại: <code>{matchedJobOrderId}</code>
+          ÄÆ¡n hÃ ng Ä‘Ã£ ghÃ©p hiá»‡n táº¡i: <code>{matchedJobOrderId}</code>
         </div>
       )}
       {message && <SuccessMessage>{message}</SuccessMessage>}
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
       {openOrdersQuery.isLoading ? (
-        <Loading label="Đang tải đơn hàng…" />
+        <Loading label="Äang táº£i Ä‘Æ¡n hÃ ngâ€¦" />
       ) : openOrdersQuery.error ? (
         <ErrorMessage error={openOrdersQuery.error} />
       ) : openOrdersQuery.data && openOrdersQuery.data.items.length > 0 ? (
         <>
           <div className="field">
-            <label>Chọn đơn hàng đang tuyển</label>
+            <label>Chá»n Ä‘Æ¡n hÃ ng Ä‘ang tuyá»ƒn</label>
             <select value={selected} onChange={(e) => setSelected(e.target.value)}>
-              <option value="">— Chọn đơn hàng —</option>
+              <option value="">â€” Chá»n Ä‘Æ¡n hÃ ng â€”</option>
               {openOrdersQuery.data.items.map((o) => (
                 <option key={o.id} value={o.id}>
-                  {o.code} — {o.title} ({marketLabel(o.market)})
+                  {o.code} â€” {o.title} ({marketLabel(o.market)})
                 </option>
               ))}
             </select>
@@ -345,11 +337,11 @@ function MatchPanel({
               mutation.mutate();
             }}
           >
-            {mutation.isPending ? 'Đang ghép…' : 'Ghép đơn hàng'}
+            {mutation.isPending ? 'Äang ghÃ©pâ€¦' : 'GhÃ©p Ä‘Æ¡n hÃ ng'}
           </button>
         </>
       ) : (
-        <Empty label="Không có đơn hàng nào đang tuyển." />
+        <Empty label="KhÃ´ng cÃ³ Ä‘Æ¡n hÃ ng nÃ o Ä‘ang tuyá»ƒn." />
       )}
     </div>
   );
@@ -358,17 +350,17 @@ function MatchPanel({
 function HistoryTimeline({ history }: { history: CandidateStageHistoryEntry[] }) {
   return (
     <div className="card">
-      <h2 className="card-title">Lịch sử giai đoạn</h2>
+      <h2 className="card-title">Lá»‹ch sá»­ giai Ä‘oáº¡n</h2>
       {history.length === 0 ? (
-        <div className="muted">Chưa có thay đổi giai đoạn nào.</div>
+        <div className="muted">ChÆ°a cÃ³ thay Ä‘á»•i giai Ä‘oáº¡n nÃ o.</div>
       ) : (
         <div className="table-wrap">
           <table className="data">
             <thead>
               <tr>
-                <th>Thời điểm</th>
-                <th>Từ → Đến</th>
-                <th>Ghi chú</th>
+                <th>Thá»i Ä‘iá»ƒm</th>
+                <th>Tá»« â†’ Äáº¿n</th>
+                <th>Ghi chÃº</th>
               </tr>
             </thead>
             <tbody>
@@ -376,9 +368,9 @@ function HistoryTimeline({ history }: { history: CandidateStageHistoryEntry[] })
                 <tr key={h.id}>
                   <td>{formatDate(h.changedAt)}</td>
                   <td>
-                    {candidateStageLabel(h.previousStage)} → {candidateStageLabel(h.newStage)}
+                    {candidateStageLabel(h.previousStage)} â†’ {candidateStageLabel(h.newStage)}
                   </td>
-                  <td>{h.note ?? '—'}</td>
+                  <td>{h.note ?? 'â€”'}</td>
                 </tr>
               ))}
             </tbody>
@@ -392,7 +384,7 @@ function HistoryTimeline({ history }: { history: CandidateStageHistoryEntry[] })
 /**
  * Copilot chat sidebar (proposal 3.2): free-form Q&A grounded on the candidate's
  * profile via /api/v1/ai/consult (RAG over KnowledgeEntry; candidateId scopes
- * the answer). Works with no Gemini key — the backend returns a deterministic,
+ * the answer). Works with no Gemini key â€” the backend returns a deterministic,
  * knowledge-grounded answer flagged aiGenerated:false (surfaced, not an error).
  */
 function CandidateCopilotPanel({ candidateId }: { candidateId: string }) {
@@ -413,9 +405,9 @@ function CandidateCopilotPanel({ candidateId }: { candidateId: string }) {
   });
 
   const examples = [
-    'Ứng viên này phù hợp đơn hàng nào?',
-    'Cần chuẩn bị giấy tờ gì cho thị trường mong muốn?',
-    'Lộ trình và chi phí dự kiến ra sao?',
+    'á»¨ng viÃªn nÃ y phÃ¹ há»£p Ä‘Æ¡n hÃ ng nÃ o?',
+    'Cáº§n chuáº©n bá»‹ giáº¥y tá» gÃ¬ cho thá»‹ trÆ°á»ng mong muá»‘n?',
+    'Lá»™ trÃ¬nh vÃ  chi phÃ­ dá»± kiáº¿n ra sao?',
   ];
 
   function ask(q: string) {
@@ -426,10 +418,10 @@ function CandidateCopilotPanel({ candidateId }: { candidateId: string }) {
 
   return (
     <div className="card">
-      <h2 className="card-title">Copilot tư vấn</h2>
+      <h2 className="card-title">Copilot tÆ° váº¥n</h2>
       <div className="muted" style={{ marginBottom: 10 }}>
-        Hỏi nhanh về ứng viên này — Copilot trả lời dựa trên cơ sở tri thức và hồ sơ. Khi chưa cấu
-        hình AI, câu trả lời vẫn bám sát dữ liệu nền (không phải lỗi).
+        Há»i nhanh vá» á»©ng viÃªn nÃ y â€” Copilot tráº£ lá»i dá»±a trÃªn cÆ¡ sá»Ÿ tri thá»©c vÃ  há»“ sÆ¡. Khi chÆ°a cáº¥u
+        hÃ¬nh AI, cÃ¢u tráº£ lá»i váº«n bÃ¡m sÃ¡t dá»¯ liá»‡u ná»n (khÃ´ng pháº£i lá»—i).
       </div>
 
       {turns.length > 0 && (
@@ -453,10 +445,10 @@ function CandidateCopilotPanel({ candidateId }: { candidateId: string }) {
       {askMutation.error != null && <ErrorMessage error={askMutation.error} />}
 
       <div className="field">
-        <label>Câu hỏi</label>
+        <label>CÃ¢u há»i</label>
         <textarea
           value={question}
-          placeholder="VD: Ứng viên 25 tuổi, tiếng Nhật N4 thì đi được đơn hàng nào?"
+          placeholder="VD: á»¨ng viÃªn 25 tuá»•i, tiáº¿ng Nháº­t N4 thÃ¬ Ä‘i Ä‘Æ°á»£c Ä‘Æ¡n hÃ ng nÃ o?"
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) ask(question);
@@ -480,7 +472,7 @@ function CandidateCopilotPanel({ candidateId }: { candidateId: string }) {
         disabled={question.trim().length === 0 || askMutation.isPending}
         onClick={() => ask(question)}
       >
-        {askMutation.isPending ? 'Đang hỏi…' : 'Hỏi Copilot'}
+        {askMutation.isPending ? 'Äang há»iâ€¦' : 'Há»i Copilot'}
       </button>
     </div>
   );
@@ -510,10 +502,10 @@ function AiConsultPanel({ candidateId }: { candidateId: string }) {
 
   return (
     <div className="card">
-      <h2 className="card-title">Tư vấn AI</h2>
+      <h2 className="card-title">TÆ° váº¥n AI</h2>
       <div className="muted" style={{ marginBottom: 10 }}>
-        Gợi ý đơn hàng phù hợp và soạn tin nhắn tiếp cận cho ứng viên này. Khi chưa cấu hình AI, hệ
-        thống vẫn trả lời dựa trên cơ sở tri thức.
+        Gá»£i Ã½ Ä‘Æ¡n hÃ ng phÃ¹ há»£p vÃ  soáº¡n tin nháº¯n tiáº¿p cáº­n cho á»©ng viÃªn nÃ y. Khi chÆ°a cáº¥u hÃ¬nh AI, há»‡
+        thá»‘ng váº«n tráº£ lá»i dá»±a trÃªn cÆ¡ sá»Ÿ tri thá»©c.
       </div>
 
       <button
@@ -521,7 +513,7 @@ function AiConsultPanel({ candidateId }: { candidateId: string }) {
         disabled={suggestMutation.isPending}
         onClick={() => suggestMutation.mutate()}
       >
-        {suggestMutation.isPending ? 'Đang phân tích…' : 'Gợi ý đơn hàng phù hợp'}
+        {suggestMutation.isPending ? 'Äang phÃ¢n tÃ­châ€¦' : 'Gá»£i Ã½ Ä‘Æ¡n hÃ ng phÃ¹ há»£p'}
       </button>
 
       {suggestMutation.error != null && (
@@ -533,7 +525,7 @@ function AiConsultPanel({ candidateId }: { candidateId: string }) {
       {suggestions != null && (
         <div style={{ marginTop: 14 }}>
           {suggestions.length === 0 ? (
-            <Empty label="Chưa tìm thấy đơn hàng phù hợp. Hãy bổ sung nguyện vọng cho ứng viên hoặc thêm đơn hàng đang tuyển." />
+            <Empty label="ChÆ°a tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng phÃ¹ há»£p. HÃ£y bá»• sung nguyá»‡n vá»ng cho á»©ng viÃªn hoáº·c thÃªm Ä‘Æ¡n hÃ ng Ä‘ang tuyá»ƒn." />
           ) : (
             <div className="steps-list">
               {suggestions.map((s) => (
@@ -541,11 +533,11 @@ function AiConsultPanel({ candidateId }: { candidateId: string }) {
                   <div className="step-index">{s.score}</div>
                   <div style={{ flex: 1 }}>
                     <div>
-                      <strong>{s.code}</strong> — {s.title}
+                      <strong>{s.code}</strong> â€” {s.title}
                     </div>
                     {Array.isArray(s.reasons) && s.reasons.length > 0 && (
                       <div className="muted" style={{ marginTop: 4 }}>
-                        {s.reasons.join(' · ')}
+                        {s.reasons.join(' Â· ')}
                       </div>
                     )}
                     <button
@@ -555,8 +547,8 @@ function AiConsultPanel({ candidateId }: { candidateId: string }) {
                       onClick={() => draftMutation.mutate(s.jobOrderId)}
                     >
                       {draftMutation.isPending && outreachJobOrderId === s.jobOrderId
-                        ? 'Đang soạn…'
-                        : 'Soạn tin tiếp cận'}
+                        ? 'Äang soáº¡nâ€¦'
+                        : 'Soáº¡n tin tiáº¿p cáº­n'}
                     </button>
                   </div>
                 </div>
@@ -575,7 +567,7 @@ function AiConsultPanel({ candidateId }: { candidateId: string }) {
       {outreach != null && (
         <div style={{ marginTop: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <strong>Tin nhắn tiếp cận</strong>
+            <strong>Tin nháº¯n tiáº¿p cáº­n</strong>
             <AiGroundingBadge aiGenerated={outreach.aiGenerated} />
           </div>
           <pre className="code" style={{ whiteSpace: 'pre-wrap' }}>
@@ -591,7 +583,7 @@ function AiConsultPanel({ candidateId }: { candidateId: string }) {
 //
 // Per-candidate document/certificate checklist (Requirements 11.2, 13.1, 13.3,
 // 13.4). Shows required vs optional and source (DEFAULT/CUSTOM), a completion
-// progress bar (rendered as "Chưa đủ dữ liệu" when the backend returns
+// progress bar (rendered as "ChÆ°a Ä‘á»§ dá»¯ liá»‡u" when the backend returns
 // 'INSUFFICIENT_DATA'), a per-market seed button, an add-custom-type control,
 // and a per-item submission-status control. Status changes update the cache
 // optimistically and recompute the completion metric locally; the server stays
@@ -600,10 +592,10 @@ function AiConsultPanel({ candidateId }: { candidateId: string }) {
 const DOC_STATUSES: DocSubmissionStatus[] = ['PENDING', 'SUBMITTED', 'VERIFIED', 'REJECTED'];
 
 const DOC_STATUS_LABELS: Record<DocSubmissionStatus, string> = {
-  PENDING: 'Chờ nộp',
-  SUBMITTED: 'Đã nộp',
-  VERIFIED: 'Đã xác minh',
-  REJECTED: 'Từ chối',
+  PENDING: 'Chá» ná»™p',
+  SUBMITTED: 'ÄÃ£ ná»™p',
+  VERIFIED: 'ÄÃ£ xÃ¡c minh',
+  REJECTED: 'Tá»« chá»‘i',
 };
 
 const DOC_STATUS_BADGE: Record<DocSubmissionStatus, string> = {
@@ -640,7 +632,7 @@ function CompletionBar({
   if (completion === 'INSUFFICIENT_DATA') {
     return (
       <div className="muted" style={{ marginBottom: 12 }}>
-        Tiến độ hồ sơ: <strong>Chưa đủ dữ liệu</strong> (chưa có giấy tờ bắt buộc nào).
+        Tiáº¿n Ä‘á»™ há»“ sÆ¡: <strong>ChÆ°a Ä‘á»§ dá»¯ liá»‡u</strong> (chÆ°a cÃ³ giáº¥y tá» báº¯t buá»™c nÃ o).
       </div>
     );
   }
@@ -655,7 +647,7 @@ function CompletionBar({
           marginBottom: 4,
         }}
       >
-        <span className="muted">Tiến độ hoàn thành hồ sơ (giấy tờ bắt buộc đã xác minh)</span>
+        <span className="muted">Tiáº¿n Ä‘á»™ hoÃ n thÃ nh há»“ sÆ¡ (giáº¥y tá» báº¯t buá»™c Ä‘Ã£ xÃ¡c minh)</span>
         <strong>{pct}%</strong>
       </div>
       <div
@@ -753,7 +745,7 @@ function DocumentChecklistPanel({
 
   function submitCustom() {
     if (label.trim().length === 0) {
-      setLabelError('Vui lòng nhập tên loại giấy tờ.');
+      setLabelError('Vui lÃ²ng nháº­p tÃªn loáº¡i giáº¥y tá».');
       return;
     }
     setLabelError(null);
@@ -764,10 +756,10 @@ function DocumentChecklistPanel({
 
   return (
     <div className="card">
-      <h2 className="card-title">Checklist giấy tờ</h2>
+      <h2 className="card-title">Checklist giáº¥y tá»</h2>
       <div className="muted" style={{ marginBottom: 10 }}>
-        Theo dõi giấy tờ/chứng chỉ của ứng viên. Bộ mặc định khởi tạo theo thị trường mong muốn
-        {desiredMarket ? ` (${marketLabel(desiredMarket)})` : ' (chưa rõ → dùng bộ "Khác")'}.
+        Theo dÃµi giáº¥y tá»/chá»©ng chá»‰ cá»§a á»©ng viÃªn. Bá»™ máº·c Ä‘á»‹nh khá»Ÿi táº¡o theo thá»‹ trÆ°á»ng mong muá»‘n
+        {desiredMarket ? ` (${marketLabel(desiredMarket)})` : ' (chÆ°a rÃµ â†’ dÃ¹ng bá»™ "KhÃ¡c")'}.
       </div>
 
       <div className="row-actions" style={{ marginBottom: 14 }}>
@@ -776,14 +768,14 @@ function DocumentChecklistPanel({
           disabled={initMutation.isPending}
           onClick={() => initMutation.mutate()}
         >
-          {initMutation.isPending ? 'Đang khởi tạo…' : 'Khởi tạo theo thị trường'}
+          {initMutation.isPending ? 'Äang khá»Ÿi táº¡oâ€¦' : 'Khá»Ÿi táº¡o theo thá»‹ trÆ°á»ng'}
         </button>
       </div>
 
       {initMutation.error != null && <ErrorMessage error={initMutation.error} />}
 
       {documentsQuery.isLoading ? (
-        <Loading label="Đang tải checklist…" />
+        <Loading label="Äang táº£i checklistâ€¦" />
       ) : documentsQuery.error ? (
         <ErrorMessage error={documentsQuery.error} />
       ) : data ? (
@@ -793,16 +785,16 @@ function DocumentChecklistPanel({
           {statusMutation.error != null && <ErrorMessage error={statusMutation.error} />}
 
           {data.items.length === 0 ? (
-            <Empty label='Chưa có giấy tờ nào. Bấm "Khởi tạo theo thị trường" hoặc thêm loại tùy biến bên dưới.' />
+            <Empty label='ChÆ°a cÃ³ giáº¥y tá» nÃ o. Báº¥m "Khá»Ÿi táº¡o theo thá»‹ trÆ°á»ng" hoáº·c thÃªm loáº¡i tÃ¹y biáº¿n bÃªn dÆ°á»›i.' />
           ) : (
             <div className="table-wrap">
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Loại giấy tờ</th>
-                    <th>Bắt buộc</th>
-                    <th>Nguồn</th>
-                    <th>Trạng thái</th>
+                    <th>Loáº¡i giáº¥y tá»</th>
+                    <th>Báº¯t buá»™c</th>
+                    <th>Nguá»“n</th>
+                    <th>Tráº¡ng thÃ¡i</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -820,14 +812,14 @@ function DocumentChecklistPanel({
                       </td>
                       <td>
                         {item.required ? (
-                          <span className="badge badge-blue">Bắt buộc</span>
+                          <span className="badge badge-blue">Báº¯t buá»™c</span>
                         ) : (
-                          <span className="badge badge-gray">Tùy chọn</span>
+                          <span className="badge badge-gray">TÃ¹y chá»n</span>
                         )}
                       </td>
                       <td>
                         <span className="badge badge-gray">
-                          {item.source === 'DEFAULT' ? 'Mặc định' : 'Tùy biến'}
+                          {item.source === 'DEFAULT' ? 'Máº·c Ä‘á»‹nh' : 'TÃ¹y biáº¿n'}
                         </span>
                       </td>
                       <td>
@@ -836,7 +828,7 @@ function DocumentChecklistPanel({
                             {DOC_STATUS_LABELS[item.status]}
                           </span>
                           <select
-                            aria-label={`Trạng thái: ${item.label}`}
+                            aria-label={`Tráº¡ng thÃ¡i: ${item.label}`}
                             value={item.status}
                             disabled={statusMutation.isPending}
                             onChange={(e) =>
@@ -864,14 +856,14 @@ function DocumentChecklistPanel({
 
           <div className="divider" />
 
-          <h3 style={{ fontSize: 'var(--fs-h3)', margin: '0 0 10px' }}>Thêm loại giấy tờ</h3>
+          <h3 style={{ fontSize: 'var(--fs-h3)', margin: '0 0 10px' }}>ThÃªm loáº¡i giáº¥y tá»</h3>
           {labelError && <ErrorMessage error={labelError} />}
           {addMutation.error != null && <ErrorMessage error={addMutation.error} />}
           <div className="field">
-            <label>Tên loại giấy tờ</label>
+            <label>TÃªn loáº¡i giáº¥y tá»</label>
             <input
               value={label}
-              placeholder="VD: Giấy xác nhận kinh nghiệm"
+              placeholder="VD: Giáº¥y xÃ¡c nháº­n kinh nghiá»‡m"
               onChange={(e) => {
                 setLabel(e.target.value);
                 if (labelError) setLabelError(null);
@@ -886,7 +878,7 @@ function DocumentChecklistPanel({
                 onChange={(e) => setRequired(e.target.checked)}
                 style={{ width: 'auto', height: 'auto' }}
               />
-              Bắt buộc
+              Báº¯t buá»™c
             </label>
           </div>
           <button
@@ -895,28 +887,28 @@ function DocumentChecklistPanel({
             onClick={submitCustom}
           >
             <Icon name="plus" size={16} />
-            {addMutation.isPending ? 'Đang thêm…' : 'Thêm loại giấy tờ'}
+            {addMutation.isPending ? 'Äang thÃªmâ€¦' : 'ThÃªm loáº¡i giáº¥y tá»'}
           </button>
         </>
       ) : (
-        <Empty label="Không tải được checklist." />
+        <Empty label="KhÃ´ng táº£i Ä‘Æ°á»£c checklist." />
       )}
     </div>
   );
 }
 
-// ---- Destination suggestions (đối chiếu DB & gợi ý cho tư vấn) --------------
+// ---- Destination suggestions (Ä‘á»‘i chiáº¿u DB & gá»£i Ã½ cho tÆ° váº¥n) --------------
 
 const SUGG_MARKET_LABEL: Record<string, string> = {
-  JAPAN: 'Nhật Bản',
-  KOREA: 'Hàn Quốc',
-  GERMANY: 'Đức',
-  TAIWAN: 'Đài Loan',
-  AUSTRALIA: 'Úc',
-  USA: 'Mỹ',
+  JAPAN: 'Nháº­t Báº£n',
+  KOREA: 'HÃ n Quá»‘c',
+  GERMANY: 'Äá»©c',
+  TAIWAN: 'ÄÃ i Loan',
+  AUSTRALIA: 'Ãšc',
+  USA: 'Má»¹',
   CANADA: 'Canada',
   UK: 'Anh',
-  OTHER: 'Khác',
+  OTHER: 'KhÃ¡c',
 };
 
 function DestinationSuggestionsPanel({ candidateId }: { candidateId: string }) {
@@ -929,20 +921,20 @@ function DestinationSuggestionsPanel({ candidateId }: { candidateId: string }) {
 
   return (
     <div className="card">
-      <h2 className="card-title">Gợi ý điểm đến phù hợp</h2>
+      <h2 className="card-title">Gá»£i Ã½ Ä‘iá»ƒm Ä‘áº¿n phÃ¹ há»£p</h2>
       <div className="muted" style={{ marginBottom: 10 }}>
-        Đối chiếu hồ sơ ứng viên với cơ sở dữ liệu chương trình XKLĐ và xếp hạng theo độ phù hợp
-        (đủ điều kiện ưu tiên trước, kèm lý do nếu chưa đạt).
+        Äá»‘i chiáº¿u há»“ sÆ¡ á»©ng viÃªn vá»›i cÆ¡ sá»Ÿ dá»¯ liá»‡u chÆ°Æ¡ng trÃ¬nh XKLÄ vÃ  xáº¿p háº¡ng theo Ä‘á»™ phÃ¹ há»£p
+        (Ä‘á»§ Ä‘iá»u kiá»‡n Æ°u tiÃªn trÆ°á»›c, kÃ¨m lÃ½ do náº¿u chÆ°a Ä‘áº¡t).
       </div>
       <button className="btn btn--secondary btn-sm" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-        {mutation.isPending ? 'Đang đối chiếu…' : 'Gợi ý điểm đến'}
+        {mutation.isPending ? 'Äang Ä‘á»‘i chiáº¿uâ€¦' : 'Gá»£i Ã½ Ä‘iá»ƒm Ä‘áº¿n'}
       </button>
       {mutation.error != null && <div style={{ marginTop: 12 }}><ErrorMessage error={mutation.error} /></div>}
 
       {suggestions != null && (
         <div style={{ marginTop: 14 }}>
           {suggestions.length === 0 ? (
-            <Empty label="Chưa tìm thấy chương trình phù hợp. Hãy bổ sung dữ liệu điểm đến hoặc nguyện vọng ứng viên." />
+            <Empty label="ChÆ°a tÃ¬m tháº¥y chÆ°Æ¡ng trÃ¬nh phÃ¹ há»£p. HÃ£y bá»• sung dá»¯ liá»‡u Ä‘iá»ƒm Ä‘áº¿n hoáº·c nguyá»‡n vá»ng á»©ng viÃªn." />
           ) : (
             <div className="steps-list">
               {suggestions.map((s) => (
@@ -953,21 +945,21 @@ function DestinationSuggestionsPanel({ candidateId }: { candidateId: string }) {
                   <div style={{ flex: 1 }}>
                     <div>
                       <strong>{s.name}</strong>{' '}
-                      <span className="muted">· {SUGG_MARKET_LABEL[s.country] ?? s.country}</span>{' '}
+                      <span className="muted">Â· {SUGG_MARKET_LABEL[s.country] ?? s.country}</span>{' '}
                       {s.eligible ? (
-                        <span className="badge badge-green">Đủ điều kiện</span>
+                        <span className="badge badge-green">Äá»§ Ä‘iá»u kiá»‡n</span>
                       ) : (
-                        <span className="badge badge-red">Chưa đạt</span>
+                        <span className="badge badge-red">ChÆ°a Ä‘áº¡t</span>
                       )}
                     </div>
                     {s.matched.length > 0 && (
                       <div className="muted" style={{ marginTop: 4, fontSize: 'var(--fs-xs)' }}>
-                        ✓ {s.matched.join(' · ')}
+                        âœ“ {s.matched.join(' Â· ')}
                       </div>
                     )}
                     {s.blockers.length > 0 && (
                       <div style={{ marginTop: 4, fontSize: 'var(--fs-xs)', color: 'var(--danger, #c0392b)' }}>
-                        ✗ {s.blockers.join(' · ')}
+                        âœ— {s.blockers.join(' Â· ')}
                       </div>
                     )}
                   </div>
@@ -985,10 +977,10 @@ function DestinationSuggestionsPanel({ candidateId }: { candidateId: string }) {
 
 const VISA_COUNTRIES = ['AUSTRALIA', 'USA', 'CANADA', 'UK', 'JAPAN', 'KOREA', 'GERMANY', 'TAIWAN'];
 const VISA_TASK_STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Chờ làm',
-  IN_PROGRESS: 'Đang làm',
-  DONE: 'Hoàn tất',
-  BLOCKED: 'Vướng mắc',
+  PENDING: 'Chá» lÃ m',
+  IN_PROGRESS: 'Äang lÃ m',
+  DONE: 'HoÃ n táº¥t',
+  BLOCKED: 'VÆ°á»›ng máº¯c',
 };
 const VISA_TASK_STATUS_BADGE: Record<string, string> = {
   PENDING: 'badge-gray',
@@ -1026,15 +1018,15 @@ function VisaCasesPanel({
 
   return (
     <div className="card">
-      <h2 className="card-title">Hồ sơ Visa &amp; Đưa đón</h2>
+      <h2 className="card-title">Há»“ sÆ¡ Visa &amp; ÄÆ°a Ä‘Ã³n</h2>
       <div className="muted" style={{ marginBottom: 10 }}>
-        Tạo checklist hồ sơ visa tùy chỉnh theo quốc gia (kèm hạn nộp tự tính) và gợi ý hậu cần
-        (bảo hiểm OSHC/IHS, vé máy bay, đưa đón sân bay, chỗ ở).
+        Táº¡o checklist há»“ sÆ¡ visa tÃ¹y chá»‰nh theo quá»‘c gia (kÃ¨m háº¡n ná»™p tá»± tÃ­nh) vÃ  gá»£i Ã½ háº­u cáº§n
+        (báº£o hiá»ƒm OSHC/IHS, vÃ© mÃ¡y bay, Ä‘Æ°a Ä‘Ã³n sÃ¢n bay, chá»— á»Ÿ).
       </div>
 
       <div className="toolbar">
         <div className="field">
-          <label>Quốc gia</label>
+          <label>Quá»‘c gia</label>
           <select value={country} onChange={(e) => setCountry(e.target.value)}>
             {VISA_COUNTRIES.map((c) => (
               <option key={c} value={c}>{SUGG_MARKET_LABEL[c] ?? c}</option>
@@ -1042,17 +1034,17 @@ function VisaCasesPanel({
           </select>
         </div>
         <div className="field">
-          <label>Ngày nhập học/xuất cảnh (dự kiến)</label>
+          <label>NgÃ y nháº­p há»c/xuáº¥t cáº£nh (dá»± kiáº¿n)</label>
           <input type="date" value={intakeDate} onChange={(e) => setIntakeDate(e.target.value)} />
         </div>
         <button className="btn btn-primary btn-sm" disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>
-          <Icon name="plus" size={16} /> {createMutation.isPending ? 'Đang tạo…' : 'Tạo hồ sơ'}
+          <Icon name="plus" size={16} /> {createMutation.isPending ? 'Äang táº¡oâ€¦' : 'Táº¡o há»“ sÆ¡'}
         </button>
       </div>
       {createMutation.error != null && <ErrorMessage error={createMutation.error} />}
 
       {casesQuery.isLoading ? (
-        <Loading label="Đang tải…" />
+        <Loading label="Äang táº£iâ€¦" />
       ) : casesQuery.error ? (
         <ErrorMessage error={casesQuery.error} />
       ) : casesQuery.data && casesQuery.data.items.length > 0 ? (
@@ -1062,7 +1054,7 @@ function VisaCasesPanel({
           ))}
         </div>
       ) : (
-        <Empty label="Chưa có hồ sơ visa nào. Tạo một hồ sơ ở trên." />
+        <Empty label="ChÆ°a cÃ³ há»“ sÆ¡ visa nÃ o. Táº¡o má»™t há»“ sÆ¡ á»Ÿ trÃªn." />
       )}
     </div>
   );
@@ -1095,16 +1087,16 @@ function VisaCaseCard({ visaCase, onChanged }: { visaCase: VisaCase; onChanged: 
           <strong>{SUGG_MARKET_LABEL[visaCase.country] ?? visaCase.country}</strong>{' '}
           <span className="badge badge-blue">{visaCase.status}</span>
           <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
-            {done}/{tasks.length} mục hoàn tất
-            {visaCase.targetIntakeDate ? ` · nhập học ${formatDate(visaCase.targetIntakeDate)}` : ''}
+            {done}/{tasks.length} má»¥c hoÃ n táº¥t
+            {visaCase.targetIntakeDate ? ` Â· nháº­p há»c ${formatDate(visaCase.targetIntakeDate)}` : ''}
           </div>
         </div>
         <div className="row-actions">
           <button className="btn btn-sm" disabled={adviceMutation.isPending} onClick={() => adviceMutation.mutate()}>
-            <Icon name="sparkles" size={14} /> {adviceMutation.isPending ? 'Đang tư vấn…' : 'Tư vấn AI'}
+            <Icon name="sparkles" size={14} /> {adviceMutation.isPending ? 'Äang tÆ° váº¥nâ€¦' : 'TÆ° váº¥n AI'}
           </button>
           <button className="btn btn-sm" disabled={logisticsMutation.isPending} onClick={() => logisticsMutation.mutate()}>
-            {logisticsMutation.isPending ? 'Đang tạo…' : 'Gợi ý hậu cần'}
+            {logisticsMutation.isPending ? 'Äang táº¡oâ€¦' : 'Gá»£i Ã½ háº­u cáº§n'}
           </button>
         </div>
       </div>
@@ -1115,8 +1107,8 @@ function VisaCaseCard({ visaCase, onChanged }: { visaCase: VisaCase; onChanged: 
 
       {visaCase.logistics && (
         <div className="success-box" style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>
-          <strong>Hậu cần:</strong> Bảo hiểm {visaCase.logistics.insuranceType || '—'} · Chỗ ở{' '}
-          {visaCase.logistics.housingType || '—'}
+          <strong>Háº­u cáº§n:</strong> Báº£o hiá»ƒm {visaCase.logistics.insuranceType || 'â€”'} Â· Chá»— á»Ÿ{' '}
+          {visaCase.logistics.housingType || 'â€”'}
           {visaCase.logistics.notes ? `\n${visaCase.logistics.notes}` : ''}
         </div>
       )}
@@ -1126,20 +1118,20 @@ function VisaCaseCard({ visaCase, onChanged }: { visaCase: VisaCase; onChanged: 
           <table className="data">
             <thead>
               <tr>
-                <th>Mục</th>
-                <th>Loại</th>
-                <th>Hạn</th>
-                <th>Trạng thái</th>
+                <th>Má»¥c</th>
+                <th>Loáº¡i</th>
+                <th>Háº¡n</th>
+                <th>Tráº¡ng thÃ¡i</th>
               </tr>
             </thead>
             <tbody>
               {tasks.map((t) => (
                 <tr key={t.id}>
                   <td style={{ whiteSpace: 'normal' }}>
-                    {t.label} {t.required && <span className="badge badge-blue">Bắt buộc</span>}
+                    {t.label} {t.required && <span className="badge badge-blue">Báº¯t buá»™c</span>}
                   </td>
                   <td>{t.category}</td>
-                  <td>{t.dueAt ? formatDate(t.dueAt) : '—'}</td>
+                  <td>{t.dueAt ? formatDate(t.dueAt) : 'â€”'}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span className={`badge ${VISA_TASK_STATUS_BADGE[t.status]}`}>
@@ -1167,7 +1159,7 @@ function VisaCaseCard({ visaCase, onChanged }: { visaCase: VisaCase; onChanged: 
   );
 }
 
-// ---- Scholarship / financial matching (Du học) -----------------------------
+// ---- Scholarship / financial matching (Du há»c) -----------------------------
 
 function ScholarshipPanel({ candidateId }: { candidateId: string }) {
   const [budget, setBudget] = useState('');
@@ -1187,14 +1179,14 @@ function ScholarshipPanel({ candidateId }: { candidateId: string }) {
 
   return (
     <div className="card">
-      <h2 className="card-title">Học bổng &amp; Tài chính</h2>
+      <h2 className="card-title">Há»c bá»•ng &amp; TÃ i chÃ­nh</h2>
       <div className="muted" style={{ marginBottom: 10 }}>
-        Nhập ngân sách/năm + GPA + IELTS để hệ thống tính chi phí, ước tính học bổng và tìm chương
-        trình trong khả năng chi trả.
+        Nháº­p ngÃ¢n sÃ¡ch/nÄƒm + GPA + IELTS Ä‘á»ƒ há»‡ thá»‘ng tÃ­nh chi phÃ­, Æ°á»›c tÃ­nh há»c bá»•ng vÃ  tÃ¬m chÆ°Æ¡ng
+        trÃ¬nh trong kháº£ nÄƒng chi tráº£.
       </div>
       <div className="grid grid-2">
         <div className="field">
-          <label>Ngân sách/năm (triệu VND)</label>
+          <label>NgÃ¢n sÃ¡ch/nÄƒm (triá»‡u VND)</label>
           <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="VD: 300" />
         </div>
         <div className="field">
@@ -1207,23 +1199,23 @@ function ScholarshipPanel({ candidateId }: { candidateId: string }) {
         </div>
       </div>
       <button className="btn btn--secondary btn-sm" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-        {mutation.isPending ? 'Đang tính…' : 'Gợi ý học bổng & chi phí'}
+        {mutation.isPending ? 'Äang tÃ­nhâ€¦' : 'Gá»£i Ã½ há»c bá»•ng & chi phÃ­'}
       </button>
       {mutation.error != null && <div style={{ marginTop: 12 }}><ErrorMessage error={mutation.error} /></div>}
 
       {results != null && (
         <div style={{ marginTop: 14 }}>
           {results.length === 0 ? (
-            <Empty label="Chưa có chương trình du học nào có dữ liệu tài chính. Hãy bổ sung học phí/học bổng cho điểm đến." />
+            <Empty label="ChÆ°a cÃ³ chÆ°Æ¡ng trÃ¬nh du há»c nÃ o cÃ³ dá»¯ liá»‡u tÃ i chÃ­nh. HÃ£y bá»• sung há»c phÃ­/há»c bá»•ng cho Ä‘iá»ƒm Ä‘áº¿n." />
           ) : (
             <div className="table-wrap">
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Chương trình</th>
-                    <th>Tổng CP/năm</th>
-                    <th>Học bổng ước tính</th>
-                    <th>CP ròng/năm</th>
+                    <th>ChÆ°Æ¡ng trÃ¬nh</th>
+                    <th>Tá»•ng CP/nÄƒm</th>
+                    <th>Há»c bá»•ng Æ°á»›c tÃ­nh</th>
+                    <th>CP rÃ²ng/nÄƒm</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -1233,17 +1225,17 @@ function ScholarshipPanel({ candidateId }: { candidateId: string }) {
                       <td>
                         <div style={{ fontWeight: 600 }}>{r.name}</div>
                         {r.notes.length > 0 && (
-                          <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>{r.notes.join(' · ')}</div>
+                          <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>{r.notes.join(' Â· ')}</div>
                         )}
                       </td>
                       <td>{r.totalCostPerYearVndM} tr</td>
-                      <td>{r.estScholarshipPct}% (≈{r.estScholarshipVndM} tr)</td>
+                      <td>{r.estScholarshipPct}% (â‰ˆ{r.estScholarshipVndM} tr)</td>
                       <td>{r.netCostPerYearVndM} tr</td>
                       <td>
                         {r.affordable ? (
-                          <span className="badge badge-green">Đủ ngân sách</span>
+                          <span className="badge badge-green">Äá»§ ngÃ¢n sÃ¡ch</span>
                         ) : (
-                          <span className="badge badge-red">Thiếu {r.shortfallVndM} tr</span>
+                          <span className="badge badge-red">Thiáº¿u {r.shortfallVndM} tr</span>
                         )}
                       </td>
                     </tr>
@@ -1254,120 +1246,6 @@ function ScholarshipPanel({ candidateId }: { candidateId: string }) {
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-// ---- Document OCR & verification (Du học) ----------------------------------
-
-const DOC_EXTRACT_TYPES = ['IELTS', 'TOEFL', 'TRANSCRIPT', 'FINANCIAL', 'PASSPORT', 'OTHER'];
-const DOC_EXTRACT_STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Chờ xử lý',
-  EXTRACTED: 'Đã bóc tách',
-  VERIFIED: 'Đã xác thực',
-  FAILED: 'Không đạt',
-  NEEDS_RESEND: 'Cần gửi lại',
-};
-const DOC_EXTRACT_STATUS_BADGE: Record<string, string> = {
-  PENDING: 'badge-gray',
-  EXTRACTED: 'badge-blue',
-  VERIFIED: 'badge-green',
-  FAILED: 'badge-red',
-  NEEDS_RESEND: 'badge-yellow',
-};
-
-function DocExtractionPanel({ candidateId }: { candidateId: string }) {
-  const queryClient = useQueryClient();
-  const key = ['docExtractions', candidateId] as const;
-  const [docType, setDocType] = useState('IELTS');
-  const [rawText, setRawText] = useState('');
-  const [minScore, setMinScore] = useState('');
-
-  const listQuery = useQuery({
-    queryKey: key,
-    queryFn: () => listDocExtractions(candidateId),
-  });
-
-  const submitMutation = useMutation({
-    mutationFn: () =>
-      submitDocExtraction({
-        candidateId,
-        docType,
-        rawText: rawText.trim() || undefined,
-        requirement: minScore ? { minScore: Number(minScore) } : undefined,
-      }),
-    onSuccess: () => {
-      setRawText('');
-      void queryClient.invalidateQueries({ queryKey: key });
-    },
-  });
-
-  return (
-    <div className="card">
-      <h2 className="card-title">Bóc tách &amp; Xác thực hồ sơ (AI)</h2>
-      <div className="muted" style={{ marginBottom: 10 }}>
-        Dán nội dung OCR của chứng chỉ (VD: "Overall Band Score 6.5") để hệ thống bóc tách điểm và
-        tự đối chiếu yêu cầu. Khi chưa cắm vision model, hệ thống sẽ yêu cầu gửi lại ảnh rõ hơn.
-      </div>
-      <div className="grid grid-2">
-        <div className="field">
-          <label>Loại giấy tờ</label>
-          <select value={docType} onChange={(e) => setDocType(e.target.value)}>
-            {DOC_EXTRACT_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label>Điểm yêu cầu tối thiểu (tùy chọn)</label>
-          <input type="number" step="0.5" value={minScore} onChange={(e) => setMinScore(e.target.value)} placeholder="VD: 6.0" />
-        </div>
-      </div>
-      <div className="field">
-        <label>Nội dung OCR / văn bản chứng chỉ</label>
-        <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Dán text đọc được từ ảnh chứng chỉ…" />
-      </div>
-      <button className="btn btn-primary btn-sm" disabled={submitMutation.isPending} onClick={() => submitMutation.mutate()}>
-        <Icon name="sparkles" size={16} /> {submitMutation.isPending ? 'Đang xử lý…' : 'Bóc tách & xác thực'}
-      </button>
-      {submitMutation.error != null && <ErrorMessage error={submitMutation.error} />}
-
-      {listQuery.isLoading ? (
-        <Loading label="Đang tải…" />
-      ) : listQuery.data && listQuery.data.items.length > 0 ? (
-        <div className="table-wrap" style={{ marginTop: 12 }}>
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Loại</th>
-                <th>Kết quả bóc tách</th>
-                <th>Trạng thái</th>
-                <th>Vấn đề</th>
-              </tr>
-            </thead>
-            <tbody>
-              {listQuery.data.items.map((d: DocumentExtraction) => (
-                <tr key={d.id}>
-                  <td>{d.docType}</td>
-                  <td style={{ whiteSpace: 'normal' }}>
-                    {Object.entries(d.extractedFields ?? {})
-                      .map(([k, v]) => `${k}: ${String(v)}`)
-                      .join(', ') || '—'}
-                  </td>
-                  <td>
-                    <span className={`badge ${DOC_EXTRACT_STATUS_BADGE[d.status] ?? 'badge-gray'}`}>
-                      {DOC_EXTRACT_STATUS_LABEL[d.status] ?? d.status}
-                    </span>
-                  </td>
-                  <td className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
-                    {(d.issues ?? []).join(', ') || '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
     </div>
   );
 }

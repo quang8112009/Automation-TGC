@@ -44,7 +44,6 @@ import { registerScholarshipRoutes } from './partners/scholarshipRoutes';
 import { registerIntakeRoutes } from './intake/routes';
 import { registerFollowUpRoutes } from './intake/followUpRoutes';
 import { registerVisaRoutes } from './visa/routes';
-import { registerDocExtractionRoutes } from './documents/routes';
 import { MessagingChannelSender } from './intake/channelSender';
 import { KnowledgeBrandProvider } from './marketing/brandKnowledge';
 import { KnowledgeService } from './recruitment/knowledge/knowledgeService';
@@ -273,13 +272,9 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   await registerVisaRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini });
 
   // Study-abroad enhancements:
-  //  - Document OCR & verification (đọc IELTS/TOEFL/bảng điểm/CMTC, tự xác thực).
-  //    The OCR provider seam is absent in Phase 1 → unreadable input degrades to
-  //    NEEDS_RESEND (the bot asks for a resend); never fabricates OCR.
   //  - Scholarship & financial matching (ngân sách + GPA + IELTS → học bổng/chi
   //    phí ròng → gợi ý cho tư vấn).
   //  - Behavior-based follow-up nurture (drop-off → tin nhắn cá nhân hóa qua kênh).
-  await registerDocExtractionRoutes(app, { prisma: deps.prisma, jwt: deps.jwt });
   await registerScholarshipRoutes(app, { prisma: deps.prisma, jwt: deps.jwt });
   await registerFollowUpRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, sender: channelSender });
 

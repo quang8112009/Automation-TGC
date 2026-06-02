@@ -1012,46 +1012,13 @@ model LogisticsPlan {
 
 
 // ===========================================================================
-// Study-abroad enhancements (additive): Document OCR & verification, Financial
-// & Scholarship matching, and Behavior-based follow-up nurturing.
-//   1. DocumentExtraction — OCR/structured-extraction result for a checklist
-//      item (IELTS/TOEFL/transcript/financial proof) + auto verification.
-//   2. DestinationProgram financial fields (below, via ALTER in migration) feed
+// Study-abroad enhancements (additive): Financial & Scholarship matching, and
+// Behavior-based follow-up nurturing.
+//   1. DestinationProgram financial fields (above, via ALTER in migration) feed
 //      the pure scholarship matcher.
-//   3. FollowUpTask — queued personalized nurture messages for drop-off contacts.
+//   2. FollowUpTask — queued personalized nurture messages for drop-off contacts.
 // All additive; no existing model/field is modified destructively.
 // ===========================================================================
-
-enum DocExtractionStatus {
-  PENDING // queued, not yet processed
-  EXTRACTED // fields parsed, awaiting verification
-  VERIFIED // parsed + meets requirement + in-date
-  FAILED // unreadable / parse error
-  NEEDS_RESEND // image too blurry / missing data → ask the contact to resend
-}
-
-// Structured extraction + verification for one uploaded document. References a
-// DocumentChecklistItem by id (soft reference, no FK) so it stays additive.
-model DocumentExtraction {
-  id              String              @id @default(uuid())
-  candidateId     String
-  checklistItemId String? // soft reference to DocumentChecklistItem.id
-  docType         String // IELTS | TOEFL | TRANSCRIPT | FINANCIAL | PASSPORT | OTHER
-  status          DocExtractionStatus @default(PENDING)
-  storageKey      String              @default("") // where the source image is stored
-  extractedFields Json                @default("{}") // { score?, expiryDate?, gpa?, amountVndM?, ... }
-  confidence      Float               @default(0) // 0..1 best-effort
-  issues          Json                @default("[]") // string[] (e.g. blurry, expired, below_requirement)
-  rawText         String              @default("")
-  provider        String              @default("none") // ocr provider id or 'none'
-  verifiedAgainst Json? // { requirement, met } snapshot used for verification
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-
-  @@index([candidateId])
-  @@index([checklistItemId])
-  @@index([status])
-}
 
 enum FollowUpStatus {
   PENDING // scheduled, not yet sent
