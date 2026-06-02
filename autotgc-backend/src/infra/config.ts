@@ -18,6 +18,8 @@ export interface AppConfig {
   frontendOrigin: string;
   webhookSecrets: Record<string, string>;
   syncStalenessHours: number;
+  /** Facebook Messenger webhook subscription verify token (optional). */
+  intakeFacebookVerifyToken: string;
 }
 
 const REQUIRED_SECRETS = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET'];
@@ -53,7 +55,9 @@ export function loadConfig(loader: SecretLoader): AppConfig {
     webhookSecrets: {
       facebook: loader.optional('WEBHOOK_SECRET_FACEBOOK') ?? '',
       website: loader.optional('WEBHOOK_SECRET_WEBSITE') ?? '',
+      zalo: loader.optional('WEBHOOK_SECRET_ZALO') ?? '',
     },
     syncStalenessHours: Number(loader.optional('SYNC_STALENESS_HOURS') ?? '6'),
+    intakeFacebookVerifyToken: loader.optional('INTAKE_FB_VERIFY_TOKEN') ?? '',
   };
 }

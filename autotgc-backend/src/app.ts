@@ -39,6 +39,10 @@ import { registerMultiFormatRoutes } from './marketing/content/routes';
 import { registerAssetRoutes } from './marketing/assets/routes';
 import { registerAssetRenderRoutes } from './marketing/assets/renderRoutes';
 import { registerAutopilotRoutes } from './marketing/autopilot/routes';
+import { registerPartnerRoutes } from './partners/routes';
+import { registerIntakeRoutes } from './intake/routes';
+import { registerVisaRoutes } from './visa/routes';
+import { MessagingChannelSender } from './intake/channelSender';
 import { KnowledgeBrandProvider } from './marketing/brandKnowledge';
 import { KnowledgeService } from './recruitment/knowledge/knowledgeService';
 import { GenerationService, PrismaAiPromptContextReader } from './content/generationService';
@@ -242,6 +246,28 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
     renderProvider: mediaRenderProvider,
     brandKnowledge,
   });
+
+  // Partners (đối tác đã hợp tác) + destination programs (nơi đưa đi XKLĐ +
+  // điều kiện). ADMIN manages (settings/update); SALES reads (lead_management/read).
+  await registerPartnerRoutes(app, { prisma: deps.prisma, jwt: deps.jwt });
+
+  // Omni-channel conversational intake (Facebook Messenger + Zalo OA chatbot):
+  // public HMAC-verified webhooks drive the dossier-collection flow, land a Lead
+  // in the central system, and a no-op sender degrades gracefully when no
+  // messaging tokens are configured. The MessagingChannelSender reuses the
+  // platform token provider so outbound replies work once tokens are present.
+  const channelSender = new MessagingChannelSender({ tokens: tokenManager });
+  await registerIntakeRoutes(app, {
+    prisma: deps.prisma,
+    jwt: deps.jwt,
+    config,
+    eventBus,
+    sender: channelSender,
+  });
+
+  // Visa Smart Checklist + logistics plan + destination suggestions (đối chiếu
+  // DB & gợi ý cho tư vấn). All behind requireAuth + rbacGuard(lead_management).
+  await registerVisaRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini });
 
   return app;
 }

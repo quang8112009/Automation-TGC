@@ -19,6 +19,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "seed:personas": "ts-node prisma/seed-personas.ts",
+    "seed:partners": "ts-node prisma/seed-partners.ts",
     "secret-scan": "node scripts/secret-scan.js"
   },
   "dependencies": {

@@ -771,3 +771,235 @@ model ActivityLog {
   @@index([targetType, targetId]) // Req 2.3
   @@index([createdAt]) // Req 2.3
 }
+
+
+// ===========================================================================
+// Omni-channel Intake + Partners/Destinations + Visa & Logistics (additive).
+//
+// Three additive subsystems for the labor-export (XKLĐ) / study-abroad flow:
+//  1. Conversational Intake — a chatbot over Facebook Messenger + Zalo OA that
+//     asks dossier questions, collects structured answers, and lands them in the
+//     central system (linked to a Lead / CandidateProfile).
+//  2. Partners & Destinations — cooperating organizations (đối tác đã hợp tác)
+//     and export/study destination programs with explicit eligibility conditions
+//     the matching agent evaluates.
+//  3. Visa & Logistics — per-country smart visa checklists with deadlines, plus
+//     a logistics plan (flight / insurance e.g. OSHC / airport pickup / housing).
+// All models/enums below are additive and do not modify existing ones.
+// ===========================================================================
+
+enum IntakeChannel {
+  FACEBOOK
+  ZALO
+  WEBSITE
+}
+
+enum IntakeStatus {
+  ACTIVE // bot is collecting answers
+  COMPLETED // all required fields collected
+  HANDED_OFF // escalated to a human consultant
+  ABANDONED // inactive / closed without completion
+}
+
+enum IntakeDirection {
+  INBOUND
+  OUTBOUND
+}
+
+// A per-contact conversation on a messaging channel. Holds the collected dossier
+// answers as JSON and the current question pointer for the intake flow engine.
+model IntakeConversation {
+  id             String        @id @default(uuid())
+  channel        IntakeChannel
+  externalUserId String // platform-scoped sender id (PSID / Zalo user id)
+  displayName    String?
+  flowKey        String        @default("xkld_default")
+  status         IntakeStatus  @default(ACTIVE)
+  currentFieldKey String? // the field the bot is currently awaiting
+  collected      Json          @default("{}") // { fieldKey: value } structured answers
+  leadId         String? // linked Lead once created
+  candidateId    String? // linked CandidateProfile once promoted
+  assignedTo     String? // consultant userId after hand-off
+  lastInboundAt  DateTime?
+  lastOutboundAt DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  messages       IntakeMessage[]
+
+  @@unique([channel, externalUserId])
+  @@index([status])
+  @@index([candidateId])
+  @@index([leadId])
+}
+
+// Append-only message log for a conversation (both directions).
+model IntakeMessage {
+  id             String             @id @default(uuid())
+  conversationId String
+  conversation   IntakeConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction      IntakeDirection
+  text           String
+  fieldKey       String? // which dossier field this message targeted (outbound prompt / inbound answer)
+  raw            Json? // raw platform payload (non-secret)
+  createdAt      DateTime           @default(now())
+
+  @@index([conversationId])
+}
+
+enum PartnerType {
+  EMPLOYER // chủ sử dụng lao động / nghiệp đoàn
+  SCHOOL // trường / cơ sở đào tạo
+  BROKER // đối tác môi giới
+  SERVICE // dịch vụ (đưa đón, bảo hiểm, nhà ở...)
+}
+
+enum PartnerStatus {
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+// A cooperating organization (đối tác đã hợp tác).
+model PartnerOrg {
+  id          String        @id @default(uuid())
+  name        String
+  type        PartnerType   @default(EMPLOYER)
+  country     String        @default("") // market/country code (free-form, see markets.ts)
+  contactName String        @default("")
+  phone       String        @default("")
+  email       String        @default("")
+  status      PartnerStatus @default(ACTIVE)
+  notes       String        @default("")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  programs    DestinationProgram[]
+
+  @@index([type])
+  @@index([country])
+  @@index([status])
+}
+
+enum DestinationStatus {
+  OPEN
+  PAUSED
+  CLOSED
+}
+
+// An export/study destination program with explicit eligibility conditions the
+// matching agent evaluates against a candidate's profile.
+model DestinationProgram {
+  id              String            @id @default(uuid())
+  name            String
+  country         String // market/country code (JAPAN|KOREA|GERMANY|TAIWAN|AUSTRALIA|...)
+  visaType        String            @default("") // free-form visa/program type
+  partnerId       String?
+  partner         PartnerOrg?       @relation(fields: [partnerId], references: [id])
+  minAge          Int?
+  maxAge          Int?
+  gender          String            @default("ANY") // ANY | MALE | FEMALE
+  requiredLanguage String           @default("") // e.g. "japanese" | "english" | ""
+  minLanguageLevel String           @default("") // e.g. N4 | IELTS5.5 | ""
+  budgetMinVndM   Int? // estimated cost floor (million VND)
+  budgetMaxVndM   Int?
+  industries      Json              @default("[]") // string[]
+  conditions      Json              @default("[]") // free-form extra condition strings (shown to agent)
+  status          DestinationStatus @default(OPEN)
+  notes           String            @default("")
+  active          Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([country])
+  @@index([status])
+  @@index([active])
+}
+
+enum VisaCaseStatus {
+  OPEN
+  IN_PROGRESS
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum VisaTaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+// A per-candidate visa case for a destination country, with a smart checklist of
+// tasks (documents + logistics) and key deadlines.
+model VisaCase {
+  id                 String         @id @default(uuid())
+  candidateId        String
+  country            String // AUSTRALIA | USA | CANADA | UK | JAPAN | KOREA | GERMANY | TAIWAN | ...
+  visaType           String         @default("")
+  status             VisaCaseStatus @default(OPEN)
+  targetIntakeDate   DateTime? // mong muốn nhập học / xuất cảnh
+  submissionDeadline DateTime? // hạn nộp hồ sơ
+  aiGenerated        Boolean        @default(false)
+  notes              String         @default("")
+  createdBy          String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  tasks              VisaTask[]
+  logistics          LogisticsPlan?
+
+  @@index([candidateId])
+  @@index([country])
+  @@index([status])
+  @@index([submissionDeadline])
+}
+
+enum VisaTaskCategory {
+  DOCUMENT
+  INSURANCE
+  FLIGHT
+  HOUSING
+  PICKUP
+  FEE
+  OTHER
+}
+
+// A single checklist item within a visa case.
+model VisaTask {
+  id        String           @id @default(uuid())
+  caseId    String
+  case      VisaCase         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  code      String // stable task code (e.g. PASSPORT, OSHC, FLIGHT_BOOKING)
+  label     String
+  category  VisaTaskCategory @default(DOCUMENT)
+  required  Boolean          @default(true)
+  status    VisaTaskStatus   @default(PENDING)
+  dueAt     DateTime?
+  note      String?
+  source    String           @default("DEFAULT") // DEFAULT | CUSTOM
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([caseId])
+  @@index([status])
+  @@index([dueAt])
+}
+
+// Logistics plan attached to a visa case: flight, insurance (e.g. OSHC), airport
+// pickup, and housing (homestay / dormitory) suggestions + bookings.
+model LogisticsPlan {
+  id            String   @id @default(uuid())
+  caseId        String   @unique
+  case          VisaCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  flightInfo    Json? // { airline?, flightNo?, departAt?, arriveAt?, from?, to? }
+  insuranceType String   @default("") // e.g. OSHC | TRAVEL | NONE
+  insuranceInfo Json? // { provider?, policyNo?, coverFrom?, coverTo? }
+  pickupService String   @default("") // partner/service name
+  pickupInfo    Json? // { provider?, pickupAt?, location? }
+  housingType   String   @default("") // HOMESTAY | DORMITORY | RENTAL | NONE
+  housingInfo   Json? // { provider?, address?, moveInAt? }
+  aiGenerated   Boolean  @default(false)
+  notes         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

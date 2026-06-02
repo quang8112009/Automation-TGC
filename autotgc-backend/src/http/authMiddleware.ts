@@ -12,6 +12,7 @@ import type { AuthContext, ResourceTarget } from '../auth/rbac';
 import { ForbiddenError, UnauthorizedError } from '../infra/errors';
 import { REALTIME_PUBLIC_PATHS } from '../realtime';
 import { API_INFO_PUBLIC_PATHS } from './apiInfo';
+import { INTAKE_PUBLIC_PATHS } from '../intake/publicPaths';
 
 export interface AuthInfo {
   userId: string;
@@ -41,6 +42,9 @@ export const PUBLIC_PATHS: readonly string[] = [
   '/api/auth/refresh',
   '/api/leads/webhook/facebook',
   '/api/leads/webhook/website',
+  // Omni-channel chatbot intake webhooks (Facebook Messenger + Zalo OA). They
+  // verify a per-channel HMAC signature inside the handler before processing.
+  ...INTAKE_PUBLIC_PATHS,
   // Real-time transports authenticate via a query-string token, so they bypass
   // the global JWT preHandler and perform their own verification.
   ...REALTIME_PUBLIC_PATHS,
