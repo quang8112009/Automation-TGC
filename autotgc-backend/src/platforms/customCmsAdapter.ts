@@ -15,7 +15,7 @@ import type {
   PublishResult,
 } from './adapter';
 import { BasePlatformAdapter } from './registry';
-import { createFetchHttpClient } from './httpClient';
+import { createFetchHttpClient, PLATFORM_DEFAULT_TIMEOUT_MS } from './httpClient';
 import type { HttpClient, HttpResponse } from './httpClient';
 import { requireToken } from './tokenProvider';
 import type { PlatformTokenProvider } from './tokenProvider';
@@ -49,13 +49,31 @@ export class CustomCmsAdapter extends BasePlatformAdapter {
   constructor(deps: CustomCmsAdapterDeps) {
     super();
     this.tokens = deps.tokens;
-    this.http = deps.httpClient ?? createFetchHttpClient();
+    this.http = deps.httpClient ?? createFetchHttpClient(undefined, PLATFORM_DEFAULT_TIMEOUT_MS);
     this.baseUrl = deps.baseUrl;
   }
 
   private requireBaseUrl(): string {
     if (!this.baseUrl || this.baseUrl.trim().length === 0) {
       throw new AppError(502, `Platform "${this.platform}" is not configured`, 'PLATFORM_NOT_CONFIGURED');
+    }
+    // SSRF hardening: the CMS base URL is operator-supplied config, so reject
+    // any non-HTTP(S) scheme (file:, gopher:, ftp:, data:, ...) that could be
+    // abused to reach local files or smuggle requests. We intentionally do NOT
+    // block private IPs here — a co-located/internal CMS host is a legitimate
+    // deployment — but the scheme MUST be http or https.
+    let parsed: URL;
+    try {
+      parsed = new URL(this.baseUrl);
+    } catch {
+      throw new AppError(502, `Platform "${this.platform}" has an invalid base URL`, 'PLATFORM_NOT_CONFIGURED');
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new AppError(
+        502,
+        `Platform "${this.platform}" base URL must use http(s)`,
+        'PLATFORM_NOT_CONFIGURED',
+      );
     }
     return this.baseUrl;
   }

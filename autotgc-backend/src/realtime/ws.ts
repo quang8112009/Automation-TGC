@@ -16,12 +16,14 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import websocketPlugin from '@fastify/websocket';
+import type { PrismaClient } from '@prisma/client';
 import type { JwtService, Role } from '../auth/jwt';
 import type { DomainEvent, EventBus } from '../infra/events';
-import { readQueryString, shouldForward } from './topics';
+import { readQueryString, shouldForward, isEventForRecipient } from './topics';
 
 export interface WebsocketDeps {
   jwt: JwtService;
+  prisma: PrismaClient;
   eventBus: EventBus;
 }
 
@@ -85,13 +87,17 @@ export async function registerWebsocket(app: FastifyInstance, deps: WebsocketDep
 
   app.get('/api/v1/ws', { websocket: true }, (socket: WsSocket, request: FastifyRequest): void => {
     let role: Role | null = null;
+    let userId: string | null = null;
     let authStarted = false;
     let unsubscribe: (() => void) | null = null;
     let closed = false;
 
     const forward = (event: DomainEvent): void => {
-      if (closed || role === null) return;
+      if (closed || role === null || userId === null) return;
       if (!shouldForward(role, event.topic, null)) return;
+      // Per-recipient authorization: SALES only receives events for resources
+      // assigned to them (fails closed when the payload carries no owner).
+      if (!isEventForRecipient(role, userId, event)) return;
       socket.send(
         JSON.stringify({
           topic: event.topic,
@@ -123,7 +129,19 @@ export async function registerWebsocket(app: FastifyInstance, deps: WebsocketDep
       try {
         const claims = await deps.jwt.verify(token, 'access');
         if (closed) return;
+        // Confirm the backing session is still ACTIVE / not revoked — the same
+        // check requireAuth enforces on REST routes. Without it a logged-out or
+        // revoked access token would keep streaming until its TTL expired.
+        const session = await deps.prisma.jwtSession.findUnique({
+          where: { sessionId: claims.sid },
+        });
+        if (closed) return;
+        if (!session || session.status !== 'ACTIVE' || session.revokedAt !== null) {
+          failAuth();
+          return;
+        }
         role = claims.role;
+        userId = claims.sub;
         unsubscribe = deps.eventBus.subscribe(forward);
         socket.send(JSON.stringify({ type: 'ready' }));
       } catch {

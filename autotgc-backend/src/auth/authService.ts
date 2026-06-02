@@ -10,6 +10,7 @@ import { validateLoginShape, validateRegistration } from './validation';
 import type { RegisterInput } from './validation';
 import {
   ConflictError,
+  ForbiddenError,
   LockedError,
   UnauthorizedError,
   ValidationError,
@@ -60,6 +61,21 @@ export class AuthService {
     const validation = validateRegistration(input);
     if (!validation.ok) {
       throw new ValidationError(validation.message, validation.code);
+    }
+
+    // Bootstrap-only public registration (privilege-escalation guard).
+    //
+    // This endpoint creates an ADMIN, so leaving it open to the public would let
+    // any anonymous caller mint a full-access admin account. We therefore allow
+    // it ONLY to bootstrap the very first account on an empty system. Once any
+    // account exists, public registration is closed and further accounts must be
+    // created by an ADMIN via the user-management API (which only mints SALES).
+    const accountCount = await this.prisma.userAccount.count();
+    if (accountCount > 0) {
+      throw new ForbiddenError(
+        'Public registration is closed. Ask an administrator to create your account.',
+        'REGISTRATION_CLOSED',
+      );
     }
 
     const username = (input.username ?? '').trim();

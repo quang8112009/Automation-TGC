@@ -5,7 +5,7 @@
  * optional client-supplied topic filtering, and small typed readers for
  * narrowing untyped Fastify query input. No secrets ever pass through here.
  */
-import type { EventTopic } from '../infra/events';
+import type { DomainEvent, EventTopic } from '../infra/events';
 import type { Role } from '../auth/jwt';
 
 /** Every topic the event bus can emit. */
@@ -66,6 +66,40 @@ export function shouldForward(
   if (!isTopicAllowedForRole(role, topic)) return false;
   if (filter && !filter.has(topic)) return false;
   return true;
+}
+
+/**
+ * Per-recipient authorization for an individual event (defense-in-depth on top
+ * of role/topic gating). SALES is assigned-only across the product, so a SALES
+ * connection must only receive events that concern a resource assigned to that
+ * same user. We read an owner hint from the event payload
+ * (`assignedTo` / `recipientUserId`):
+ *
+ *  - ADMIN receives everything (subject to `shouldForward`).
+ *  - SALES receives an event ONLY when the payload's owner matches the
+ *    connection's userId. When the payload carries NO owner field at all we
+ *    fail closed for SALES (an unscoped lead/notification could belong to
+ *    anyone), preventing cross-tenant leakage over the realtime channel.
+ *
+ * Pure and deterministic — no I/O.
+ */
+export function isEventForRecipient(
+  role: Role,
+  userId: string,
+  event: Pick<DomainEvent, 'payload'>,
+): boolean {
+  if (role === 'ADMIN') return true;
+
+  const payload = (event.payload ?? {}) as Record<string, unknown>;
+  const owner =
+    typeof payload.assignedTo === 'string'
+      ? payload.assignedTo
+      : typeof payload.recipientUserId === 'string'
+        ? payload.recipientUserId
+        : undefined;
+
+  // SALES: only receive events explicitly owned by this user. No owner => deny.
+  return owner !== undefined && owner === userId;
 }
 
 /** Read a single string-valued key from an untyped Fastify query object. */

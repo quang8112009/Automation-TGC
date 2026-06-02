@@ -17,7 +17,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { JwtService, Role } from '../auth/jwt';
 import type { DomainEvent, EventBus } from '../infra/events';
 import { UnauthorizedError } from '../infra/errors';
-import { parseTopicFilter, readQueryString, shouldForward } from './topics';
+import { parseTopicFilter, readQueryString, shouldForward, isEventForRecipient } from './topics';
 
 /** Heartbeat interval (ms). Keeps proxies/clients from idling the stream out. */
 const HEARTBEAT_MS = 25_000;
@@ -30,6 +30,12 @@ export interface SseDeps {
 
 /** Routes the SSE endpoint is mounted on (canonical + alias). */
 const SSE_PATHS: readonly string[] = ['/api/v1/stream', '/api/stream'];
+
+/** The authenticated principal for a realtime connection. */
+interface RealtimePrincipal {
+  userId: string;
+  role: Role;
+}
 
 /**
  * Extract the JWT from the query string (`?access_token=`) or, as a fallback,
@@ -49,20 +55,36 @@ function extractToken(request: FastifyRequest): string | undefined {
   return undefined;
 }
 
-/** Authenticate an SSE request, returning the principal's role. */
-async function authenticate(request: FastifyRequest, deps: SseDeps): Promise<Role> {
+/**
+ * Authenticate an SSE request, returning the principal. In addition to
+ * verifying the access token's signature/type, we confirm the backing
+ * `JwtSession` is still ACTIVE and not revoked — the SAME check `requireAuth`
+ * performs on REST routes. Without it, a logged-out / revoked token would keep
+ * streaming events until its TTL expired (a real revocation bypass).
+ */
+async function authenticate(request: FastifyRequest, deps: SseDeps): Promise<RealtimePrincipal> {
   const token = extractToken(request);
   if (!token) {
     throw new UnauthorizedError('Missing access token');
   }
+  let userId: string;
   let role: Role;
+  let sid: string;
   try {
     const claims = await deps.jwt.verify(token, 'access');
+    userId = claims.sub;
     role = claims.role;
+    sid = claims.sid;
   } catch {
     throw new UnauthorizedError('Invalid or expired token');
   }
-  return role;
+
+  const session = await deps.prisma.jwtSession.findUnique({ where: { sessionId: sid } });
+  if (!session || session.status !== 'ACTIVE' || session.revokedAt !== null) {
+    throw new UnauthorizedError('Session is not active');
+  }
+
+  return { userId, role };
 }
 
 /** Register the Server-Sent Events endpoint(s). */
@@ -70,7 +92,7 @@ export function registerSse(app: FastifyInstance, deps: SseDeps): void {
   const handler = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     // Authenticate BEFORE switching the response into streaming mode so that a
     // failure produces a normal 401 envelope via the global error handler.
-    const role = await authenticate(request, deps);
+    const principal = await authenticate(request, deps);
 
     const filter = parseTopicFilter(readQueryString(request.query, 'topics'));
 
@@ -98,7 +120,10 @@ export function registerSse(app: FastifyInstance, deps: SseDeps): void {
 
     const unsubscribe = deps.eventBus.subscribe((event: DomainEvent) => {
       if (closed) return;
-      if (!shouldForward(role, event.topic, filter)) return;
+      if (!shouldForward(principal.role, event.topic, filter)) return;
+      // Per-recipient authorization: SALES only receives events for resources
+      // assigned to them (fails closed when the payload carries no owner).
+      if (!isEventForRecipient(principal.role, principal.userId, event)) return;
       const data = JSON.stringify({
         topic: event.topic,
         type: event.type,

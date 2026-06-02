@@ -35,7 +35,7 @@ import type {
 } from './adapter';
 import { BasePlatformAdapter } from './registry';
 import { PLATFORM_BASE_URLS } from './baseUrls';
-import { createFetchHttpClient } from './httpClient';
+import { createFetchHttpClient, PLATFORM_DEFAULT_TIMEOUT_MS } from './httpClient';
 import type { HttpClient, HttpResponse } from './httpClient';
 import { requireToken } from './tokenProvider';
 import type { PlatformTokenProvider } from './tokenProvider';
@@ -66,7 +66,7 @@ export class ZaloAdapter extends BasePlatformAdapter {
   constructor(deps: ZaloAdapterDeps) {
     super();
     this.tokens = deps.tokens;
-    this.http = deps.httpClient ?? createFetchHttpClient();
+    this.http = deps.httpClient ?? createFetchHttpClient(undefined, PLATFORM_DEFAULT_TIMEOUT_MS);
     this.baseUrl = deps.baseUrl ?? PLATFORM_BASE_URLS.zalo;
   }
 

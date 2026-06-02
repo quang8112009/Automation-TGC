@@ -59,7 +59,14 @@ export class LeadService {
       await this.eventBus.publish({
         topic: 'lead',
         type,
-        payload: { id: lead.leadId, status: lead.status, source: lead.source },
+        // `assignedTo` lets the realtime layer scope SALES to their own leads
+        // (per-recipient authorization). null = unassigned (ADMIN-only).
+        payload: {
+          id: lead.leadId,
+          status: lead.status,
+          source: lead.source,
+          assignedTo: lead.assignedTo ?? null,
+        },
       });
     } catch {
       // Event publishing is non-critical; swallow so the request still succeeds.
@@ -150,7 +157,13 @@ export class LeadService {
     }
 
     const safePage = page > 0 ? page : 1;
-    const safeLimit = limit > 0 ? limit : 20;
+    // Clamp the page size: a positive default, capped at MAX_PAGE_SIZE so a
+    // hostile/oversized `limit` cannot turn into an unbounded Prisma `take`
+    // (memory-exhaustion / DoS amplifier). Callers asking for "everything"
+    // still get a sane ceiling and can page.
+    const MAX_PAGE_SIZE = 1000;
+    const requested = limit > 0 ? limit : 20;
+    const safeLimit = Math.min(requested, MAX_PAGE_SIZE);
 
     const [items, total] = await Promise.all([
       this.prisma.lead.findMany({

@@ -35,7 +35,7 @@ export const REALTIME_PUBLIC_PATHS: readonly string[] = [
 
 /** Register both real-time transports (WebSocket first, then SSE). */
 export async function registerRealtime(app: FastifyInstance, deps: RealtimeDeps): Promise<void> {
-  await registerWebsocket(app, { jwt: deps.jwt, eventBus: deps.eventBus });
+  await registerWebsocket(app, { jwt: deps.jwt, prisma: deps.prisma, eventBus: deps.eventBus });
   registerSse(app, { jwt: deps.jwt, prisma: deps.prisma, eventBus: deps.eventBus });
 }
 
@@ -45,6 +45,7 @@ export {
   ALL_TOPICS,
   SALES_TOPICS,
   isTopicAllowedForRole,
+  isEventForRecipient,
   parseTopicFilter,
   shouldForward,
 } from './topics';

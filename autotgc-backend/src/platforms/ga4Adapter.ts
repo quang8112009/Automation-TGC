@@ -15,7 +15,7 @@ import type {
 } from './adapter';
 import { BasePlatformAdapter } from './registry';
 import { PLATFORM_BASE_URLS } from './baseUrls';
-import { createFetchHttpClient } from './httpClient';
+import { createFetchHttpClient, PLATFORM_DEFAULT_TIMEOUT_MS } from './httpClient';
 import type { HttpClient, HttpResponse } from './httpClient';
 import { requireToken } from './tokenProvider';
 import type { PlatformTokenProvider } from './tokenProvider';
@@ -49,7 +49,7 @@ export class Ga4Adapter extends BasePlatformAdapter {
   constructor(deps: Ga4AdapterDeps) {
     super();
     this.tokens = deps.tokens;
-    this.http = deps.httpClient ?? createFetchHttpClient();
+    this.http = deps.httpClient ?? createFetchHttpClient(undefined, PLATFORM_DEFAULT_TIMEOUT_MS);
     this.propertyId = deps.propertyId ?? 'properties';
     this.baseUrl = deps.baseUrl ?? PLATFORM_BASE_URLS.ga4;
   }
