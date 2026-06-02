@@ -20,6 +20,7 @@ import { ValidationError } from '../infra/errors';
 import type { EventBus } from '../infra/events';
 import type { GenerationService } from '../content/generationService';
 import type { SchedulingService } from '../content/schedulingService';
+import type { ContentGenerator } from '../strategy/personaService';
 import { WorkflowOrchestrator } from './orchestrator';
 import { buildContentPipelineWorkflow } from './contentPipelineWorkflow';
 
@@ -31,6 +32,8 @@ export interface OrchestrationRouteDeps {
   generationService?: GenerationService;
   /** Optional; when present, the schedule step can publish-schedule a draft. */
   schedulingService?: SchedulingService;
+  /** Optional Gemini seam for the EditorAgent's summary enrichment (proposal 3.4). */
+  gemini?: ContentGenerator;
 }
 
 interface IdParams {
@@ -56,13 +59,13 @@ function isRecordOfStrings(value: unknown): value is Record<string, string> {
 }
 
 export function registerOrchestrationRoutes(app: FastifyInstance, deps: OrchestrationRouteDeps): void {
-  const { prisma, jwt, eventBus, generationService, schedulingService } = deps;
+  const { prisma, jwt, eventBus, generationService, schedulingService, gemini } = deps;
   const auth = requireAuth({ prisma, jwt });
   const orchestrator = new WorkflowOrchestrator(prisma, eventBus);
 
   // Pre-register the content pipeline definition so runNext/resume can resolve it.
   orchestrator.registerDefinition(
-    buildContentPipelineWorkflow({ generationService, schedulingService }),
+    buildContentPipelineWorkflow({ generationService, schedulingService, gemini }),
   );
 
   // Start a content pipeline run.
@@ -84,7 +87,7 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: Orchestr
       if (platforms.length > 0) initialContext.platforms = platforms;
       if (scheduledAt) initialContext.scheduledAt = scheduledAt;
 
-      const definition = buildContentPipelineWorkflow({ generationService, schedulingService });
+      const definition = buildContentPipelineWorkflow({ generationService, schedulingService, gemini });
       const run = await orchestrator.start(definition, initialContext, request.auth?.userId);
       return reply.code(201).send({ runId: run.id, status: run.status, currentStep: run.currentStep });
     },

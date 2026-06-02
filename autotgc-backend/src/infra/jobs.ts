@@ -34,6 +34,8 @@ import type { AdapterRegistry } from '../platforms/registry';
 import type { AlertDispatcher } from './alerts';
 import { GeminiClient } from './gemini';
 import { getEventBus } from './events';
+import { ReportService } from '../reporting/reportService';
+import { registerReportJobs } from '../reporting/reportScheduler';
 import { createPublishQueue, createScoreQueue, enqueuePublish, enqueueScore } from '../queues/queues';
 // --- AI marketing autopilot (opt-in scheduled jobs) collaborators ------------
 import { isMarket } from '../marketing/markets';
@@ -278,10 +280,19 @@ export function startScheduledJobs(deps: JobDeps): Scheduler {
   const enabledOptionalJobs = optionalJobs.map((j) => j.name);
   registerAutopilotJobs(scheduler, optionalJobs, deps);
 
+  // --- Company AI reports (weekly + monthly) --------------------------------
+  // Reuse the GeminiClient already built for weekly-feedback so the report
+  // interpretation seam shares the same configured key/model. ReportService
+  // falls back to a deterministic summary when Gemini is absent/fails, and the
+  // jobs only ever persist DRAFT reports (review mode). Errors thrown inside
+  // these jobs are caught + logged by the NodeCronScheduler (Req 4.1, 4.3).
+  const reportService = new ReportService(prisma, gemini);
+  registerReportJobs(scheduler, { reportService, secrets });
+
   scheduler.start();
   logger.info(
     {
-      jobs: Object.keys(exprs),
+      jobs: [...Object.keys(exprs), 'weekly-company-report', 'monthly-company-report'],
       optionalJobs: enabledOptionalJobs,
       queueMode: Boolean(redisUrl),
     },

@@ -37,6 +37,9 @@ function walk(dir) {
       if (m) {
         // Allow benign loopback/version-like matches in examples.
         if (label === 'IP address' && /127\.0\.0\.1|0\.0\.0\.0|example/.test(text)) continue;
+        // Allow documentation placeholders like password='<db-pass>' — an
+        // angle-bracket token is a fill-in, never a real committed secret.
+        if (label === 'inline password' && /<[^'"<>]+>/.test(m[0])) continue;
         findings.push(`${label} in ${full}: ${m[0]}`);
       }
     }

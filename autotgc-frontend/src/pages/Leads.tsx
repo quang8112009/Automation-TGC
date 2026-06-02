@@ -125,9 +125,12 @@ export function Leads() {
   }
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Leads</h1>
+        <div>
+          <div className="eyebrow">CRM tuyển dụng</div>
+          <h1 className="page-title">Leads</h1>
+        </div>
         <div className="row-actions">
           <button className="btn btn-sm" disabled={exportBusy} onClick={() => handleExport('csv')}>
             Export CSV

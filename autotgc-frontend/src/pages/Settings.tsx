@@ -18,9 +18,12 @@ export function Settings() {
   }
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Settings</h1>
+        <div>
+          <div className="eyebrow">Hệ thống</div>
+          <h1 className="page-title">Settings</h1>
+        </div>
       </div>
 
       <div className="card" style={{ maxWidth: 520 }}>

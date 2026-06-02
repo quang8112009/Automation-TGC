@@ -10,6 +10,10 @@ import type { JwtService } from '../auth/jwt';
 import { AuthService } from '../auth/authService';
 import { LeadService } from '../leads/leadService';
 import type { UpdateLeadInput } from '../leads/leadService';
+import { NoteAnalysisService } from '../leads/noteAnalysisService';
+import { ScheduleBoardService } from '../content/scheduleBoardService';
+import { ApprovalQueueService } from '../recruitment/approvalQueueService';
+import type { ReorderRequest } from '../content/reorder';
 import {
   resolveFacebookAttribution,
   resolveWebsiteAttribution,
@@ -17,6 +21,15 @@ import {
 import type { Attribution, CreateLeadInput } from '../leads/validation';
 import { verifySignature } from '../infra/hmac';
 import { isDataStale, isUpcoming } from '../dashboard/helpers';
+import { buildApprovalQueue } from '../dashboard/assembler';
+import { composeOverview, safeRate } from '../dashboard/adminOverview';
+import type {
+  ActivityFeedItem,
+  CompanyKpis,
+  PersonalKpis,
+} from '../dashboard/adminOverview';
+import { ActivityLogger } from '../oversight/activityLogger';
+import type { OversightService } from '../oversight/oversightService';
 import {
   UnauthorizedError,
   ValidationError,
@@ -37,6 +50,9 @@ export interface RouteDeps {
   config: AppConfig;
   /** Shared domain event bus; when present, lead events are published. */
   eventBus?: EventBus;
+  /** Central oversight emit point; when present, supervised lead status
+   * changes (QUALIFIED/CONVERTED) fan out one ActivityLog + N notifications. */
+  oversight?: OversightService;
 }
 
 interface IdParams {
@@ -52,6 +68,28 @@ function asInt(v: unknown, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 }
 
+/** Parse an ISO date string into a Date, or undefined when absent/invalid. */
+function parseDate(value: unknown): Date | undefined {
+  const s = asString(value);
+  if (!s) return undefined;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+/**
+ * Parse a drag-and-drop `Reorder_Request` body: `{ orderedIds: string[] }`. A
+ * missing/non-array `orderedIds` or any non-string entry is rejected with 400 so
+ * the pure reorder helpers always receive a well-formed string[] (Req 9.2, 10.1).
+ */
+function parseReorderRequest(body: unknown): ReorderRequest {
+  const raw = (body ?? {}) as Record<string, unknown>;
+  const ids = raw.orderedIds;
+  if (!Array.isArray(ids) || !ids.every((x): x is string => typeof x === 'string')) {
+    throw new ValidationError('orderedIds must be an array of strings', 'REORDER_IDS_INVALID');
+  }
+  return { orderedIds: ids };
+}
+
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
   const { prisma, jwt, config } = deps;
   const authService = new AuthService(
@@ -61,7 +99,10 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     config.accessTokenTtlHours,
     config.refreshTokenTtlDays,
   );
-  const leadService = new LeadService(prisma, deps.eventBus);
+  const leadService = new LeadService(prisma, deps.eventBus, deps.oversight);
+  const noteAnalysisService = new NoteAnalysisService(prisma);
+  const scheduleBoardService = new ScheduleBoardService(prisma);
+  const approvalQueueService = new ApprovalQueueService(prisma);
   const auth = requireAuth({ prisma, jwt });
 
   // ---- Health ----------------------------------------------------------------
@@ -194,6 +235,20 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     },
   );
 
+  // Note intent analysis (proposal 3.3): a read-only "độ nóng" score + suggested
+  // next status derived from the lead's notes. SALES is assigned-only (resolved
+  // by leadTargetById); the service also re-checks scoping defensively.
+  app.get(
+    '/api/leads/:id/intent',
+    { preHandler: [auth, leadTargetById('read')] },
+    async (request, reply) => {
+      const actor = getAuth(request);
+      const { id } = request.params as IdParams;
+      const signal = await noteAnalysisService.analyzeLead(id, actor);
+      return reply.code(200).send({ leadId: id, ...signal });
+    },
+  );
+
   app.put(
     '/api/leads/:id',
     { preHandler: [auth, leadTargetById('update')] },
@@ -297,9 +352,56 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   app.get(
     '/api/dashboard/notifications',
     { preHandler: [auth, dashboardGuard] },
-    async (_request, reply) => {
-      const notifications = await buildDashboardNotifications(prisma);
+    async (request, reply) => {
+      const notifications = await buildDashboardNotifications(prisma, getAuth(request));
       return reply.code(200).send({ notifications });
+    },
+  );
+
+  // ---- Drag-and-drop: Schedule_Board + Approval_Queue ------------------------
+  // All behind requireAuth + rbacGuard. Schedule_Board reorder/reschedule map to
+  // module 'strategy'/update, Approval_Queue reorder maps to 'feedback'/update —
+  // so ADMIN may write and SALES is denied with 403 (Req 9.7, 10.1). Body
+  // validation parses dates / orderedIds; bad input -> ValidationError (400).
+  const strategyUpdateGuard = rbacGuard(() => ({ module: 'strategy', action: 'update' }));
+  const feedbackUpdateGuard = rbacGuard(() => ({ module: 'feedback', action: 'update' }));
+
+  // Reorder a plan's ContentPlanItems from a drag-and-drop gesture (Req 9.2, 9.3, 9.7).
+  app.post(
+    '/api/v1/content-plans/:planId/reorder',
+    { preHandler: [auth, strategyUpdateGuard] },
+    async (request, reply) => {
+      const { planId } = request.params as { planId: string };
+      const req = parseReorderRequest(request.body);
+      const items = await scheduleBoardService.reorderItems(planId, req);
+      return reply.code(200).send({ items });
+    },
+  );
+
+  // Reschedule a single ContentPlanItem to a new target date (Req 9.1).
+  app.put(
+    '/api/v1/content-plan-items/:id/reschedule',
+    { preHandler: [auth, strategyUpdateGuard] },
+    async (request, reply) => {
+      const { id } = request.params as IdParams;
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const targetDate = parseDate(body.targetDate);
+      if (!targetDate) {
+        throw new ValidationError('targetDate is required', 'RESCHEDULE_TARGET_REQUIRED');
+      }
+      const item = await scheduleBoardService.rescheduleItem(id, targetDate);
+      return reply.code(200).send(item);
+    },
+  );
+
+  // Reorder the Approval_Queue (DRAFT drafts ∪ PENDING_REVIEW insights) (Req 10.1).
+  app.post(
+    '/api/v1/approval-queue/reorder',
+    { preHandler: [auth, feedbackUpdateGuard] },
+    async (request, reply) => {
+      const req = parseReorderRequest(request.body);
+      const items = await approvalQueueService.reorder(req);
+      return reply.code(200).send({ items });
     },
   );
 }
@@ -314,17 +416,74 @@ async function buildDashboardOverview(
   const now = new Date();
   const horizon = new Date(now.getTime() + 7 * 86400 * 1000);
 
-  // SALES KPIs are scoped to assigned leads.
+  // Role-branched overview (Req 3.6, 6.1–6.5): ADMIN gets a company-wide payload
+  // with a Recent_Activity_Feed; SALES gets a personal, assigned-only payload
+  // with NO feed and NO company stats. The scope decision + divide-by-zero-safe
+  // rate live in the pure `composeOverview`/`safeRate` helpers; this layer only
+  // reads the data and hands it over. The Approval_Queue, upcoming-publishing
+  // schedule and failed-post / token alerts remain ADMIN operational content
+  // (Generation/Feedback/Publishing) and are preserved alongside the company
+  // payload to minimize breakage for existing consumers.
+  const isAdmin = actor.role === 'ADMIN';
+
+  // SALES KPIs are scoped to assigned leads (Req 3.5); ADMIN is company-wide.
   const leadWhere = actor.role === 'SALES' ? { assignedTo: actor.userId } : {};
+
+  // Lead KPIs (role-scoped) are visible to BOTH roles; the data-sync freshness
+  // banner is harmless metadata. Everything else is ADMIN-only and is fetched
+  // only for ADMIN so no Generation/Feedback/Publishing data reaches SALES.
+  const [totalLeads, leadsByStatusRaw, latestAnalytics] = await Promise.all([
+    prisma.lead.count({ where: leadWhere }),
+    prisma.lead.groupBy({ by: ['status'], where: leadWhere, _count: { _all: true } }),
+    prisma.analyticsRecord.findFirst({ orderBy: { collectedAt: 'desc' } }),
+  ]);
+
+  const lastSync = latestAnalytics?.collectedAt ?? null;
+  const stale = isDataStale(lastSync, now, config.syncStalenessHours);
+
+  const leadsByStatus: Record<string, number> = {};
+  for (const row of leadsByStatusRaw as Array<{ status: string; _count: { _all: number } }>) {
+    leadsByStatus[row.status] = row._count._all;
+  }
+
+  const dataSync = {
+    lastSync,
+    stale,
+    status: stale ? 'STALE' : 'CURRENT',
+    thresholdHours: config.syncStalenessHours,
+  };
+
+  // SALES: a lead-only, read-only dashboard scoped to assigned leads. The
+  // Approval_Queue, upcoming publishing schedule, failure/token alerts AND the
+  // company-wide Recent_Activity_Feed are intentionally omitted so no admin
+  // operational content or company stats leak to a consultant account
+  // (Req 3.4, 6.3, 6.4). The `company` argument is discarded by composeOverview
+  // for SALES, so we never compute company-wide data for this branch.
+  if (!isAdmin) {
+    const personalKpis: PersonalKpis = { totalLeads, leadsByStatus };
+    const emptyCompany: { kpis: CompanyKpis; recentActivity: ActivityFeedItem[] } = {
+      kpis: {
+        totalLeads: 0,
+        candidateFunnel: {},
+        pendingApprovals: 0,
+        conversionRate: 'INSUFFICIENT_DATA',
+      },
+      recentActivity: [],
+    };
+    const salesPayload = composeOverview(actor.role, emptyCompany, { kpis: personalKpis });
+    return {
+      ...salesPayload,
+      dataSync,
+    };
+  }
 
   const [
     draftCount,
     pendingInsightCount,
     scheduledPosts,
     failedPosts,
-    totalLeads,
-    leadsByStatusRaw,
-    latestAnalytics,
+    queueDrafts,
+    queueInsights,
   ] = await Promise.all([
     prisma.contentDraft.count({ where: { status: 'DRAFT' } }),
     prisma.learningInsight.count({ where: { insightStatus: 'PENDING_REVIEW' } }),
@@ -336,25 +495,110 @@ async function buildDashboardOverview(
       where: { status: 'FAILED' },
       orderBy: { updatedAt: 'desc' },
     }),
-    prisma.lead.count({ where: leadWhere }),
-    prisma.lead.groupBy({ by: ['status'], where: leadWhere, _count: { _all: true } }),
-    prisma.analyticsRecord.findFirst({ orderBy: { collectedAt: 'desc' } }),
+    // Approval_Queue membership for the drag-and-drop UX (Req 10.1, 10.3): the
+    // DRAFT drafts and PENDING_REVIEW insights with their persisted priorityIndex.
+    prisma.contentDraft.findMany({
+      where: { status: 'DRAFT' },
+      select: { id: true, title: true, status: true, priorityIndex: true, createdAt: true },
+    }),
+    prisma.learningInsight.findMany({
+      where: { insightStatus: 'PENDING_REVIEW' },
+      select: { id: true, insightStatus: true, insightType: true, priorityIndex: true, generatedAt: true },
+    }),
   ]);
 
-  const upcomingPosts = scheduledPosts.filter((p) => isUpcoming(p.scheduledAt, now));
-  const lastSync = latestAnalytics?.collectedAt ?? null;
-  const stale = isDataStale(lastSync, now, config.syncStalenessHours);
+  // Compose the ordered Approval_Queue items via the pure assembler so the
+  // rendered order matches the persisted priorityIndex (ascending) — Req 10.3.
+  const approvalQueueItems = buildApprovalQueue(
+    queueDrafts.map((d) => ({
+      id: d.id,
+      status: 'DRAFT' as const,
+      title: d.title,
+      createdAt: d.createdAt.toISOString(),
+      priorityIndex: d.priorityIndex,
+    })),
+    queueInsights.map((i) => ({
+      id: i.id,
+      insightStatus: 'PENDING_REVIEW' as const,
+      title: i.insightType,
+      createdAt: i.generatedAt.toISOString(),
+      priorityIndex: i.priorityIndex,
+    })),
+  ).map((item) => ({
+    id: item.id,
+    kind: item.kind,
+    title: item.title,
+    priorityIndex: item.priorityIndex,
+  }));
 
-  const leadsByStatus: Record<string, number> = {};
-  for (const row of leadsByStatusRaw as Array<{ status: string; _count: { _all: number } }>) {
-    leadsByStatus[row.status] = row._count._all;
+  const upcomingPosts = scheduledPosts.filter((p) => isUpcoming(p.scheduledAt, now));
+
+  // Company-wide candidate funnel by CandidateStage (Req 6.1). Loaded
+  // best-effort: a funnel read failure must not break the operational overview,
+  // mirroring the oversight error-isolation principle (auxiliary read).
+  let candidateFunnel: Record<string, number> = {};
+  try {
+    const funnelRows = await prisma.candidateProfile.groupBy({
+      by: ['stage'],
+      _count: { _all: true },
+    });
+    for (const row of funnelRows as Array<{ stage: string; _count: { _all: number } }>) {
+      candidateFunnel[row.stage] = row._count._all;
+    }
+  } catch {
+    candidateFunnel = {};
   }
 
+  // Recent_Activity_Feed from the append-only ActivityLog, newest first (Req 6.2,
+  // 6.5, 6.6). createdAt is serialized to an ISO string for the feed item.
+  // Loaded best-effort so a feed read failure degrades to an empty feed rather
+  // than failing the dashboard.
+  let recentActivity: ActivityFeedItem[] = [];
+  try {
+    const activityLogger = new ActivityLogger(prisma);
+    const { items } = await activityLogger.listRecent(1, 20);
+    recentActivity = items.map((entry) => ({
+      actorUserId: entry.actorUserId,
+      action: entry.action,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      createdAt: entry.createdAt.toISOString(),
+    }));
+  } catch {
+    recentActivity = [];
+  }
+
+  // Company KPIs (Req 6.1): company-wide lead total, candidate funnel, pending
+  // approvals (existing DRAFT drafts + PENDING_REVIEW insights), and a
+  // divide-by-zero-safe conversion rate (Req 6.7).
+  const convertedLeads = leadsByStatus.CONVERTED ?? 0;
+  const companyKpis: CompanyKpis = {
+    totalLeads,
+    candidateFunnel,
+    pendingApprovals: draftCount + pendingInsightCount,
+    conversionRate: safeRate(convertedLeads, totalLeads),
+  };
+
+  // The personal payload is discarded by composeOverview for ADMIN, but a
+  // well-typed value is still required by the pure helper's signature.
+  const personalKpis: PersonalKpis = { totalLeads, leadsByStatus };
+
+  const overview = composeOverview(
+    actor.role,
+    { kpis: companyKpis, recentActivity },
+    { kpis: personalKpis },
+  );
+
+  // Preserve the existing ADMIN operational sections (Approval_Queue, upcoming
+  // publishing schedule, failure/token alerts, data-sync banner) alongside the
+  // role-branched company payload to minimize breakage for existing consumers.
   return {
+    ...overview,
     approvalQueue: {
       draftCount,
       pendingInsightCount,
       total: draftCount + pendingInsightCount,
+      items: approvalQueueItems,
     },
     upcomingPosts: upcomingPosts.map((p) => ({
       id: p.id,
@@ -371,20 +615,19 @@ async function buildDashboardOverview(
         retryCount: p.retryCount,
       })),
     },
-    kpis: {
-      totalLeads,
-      leadsByStatus,
-    },
-    dataSync: {
-      lastSync,
-      stale,
-      status: stale ? 'STALE' : 'CURRENT',
-      thresholdHours: config.syncStalenessHours,
-    },
+    dataSync,
   };
 }
 
-async function buildDashboardNotifications(prisma: PrismaClient) {
+async function buildDashboardNotifications(prisma: PrismaClient, actor: AuthInfo) {
+  // Every notification kind here (failed posts, pending AI insights, upcoming
+  // scheduled posts) is ADMIN operational content from the Publishing / Feedback
+  // modules. SALES has no access to those modules, so a SALES principal receives
+  // an empty notification feed rather than admin task content.
+  if (actor.role !== 'ADMIN') {
+    return [] as Array<{ type: string; refId: string; message: string; at: Date }>;
+  }
+
   const now = new Date();
   const horizon = new Date(now.getTime() + 7 * 86400 * 1000);
 

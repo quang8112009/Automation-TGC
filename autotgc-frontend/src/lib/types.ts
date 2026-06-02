@@ -47,27 +47,88 @@ export interface FailedPost {
   retryCount: number;
 }
 
-export interface DashboardOverview {
-  approvalQueue: {
-    draftCount: number;
-    pendingInsightCount: number;
-    total: number;
-  };
-  upcomingPosts: UpcomingPost[];
-  alerts: {
+export interface ApprovalQueueItem {
+  id: string;
+  kind: 'DRAFT' | 'INSIGHT';
+  title: string;
+  priorityIndex: number;
+}
+
+/** Data-sync freshness banner metadata (returned for both roles). */
+export interface DashboardDataSync {
+  lastSync: string | null;
+  stale: boolean;
+  status: string;
+  thresholdHours: number;
+}
+
+/** A derived metric value that may be unavailable because there is too little data. */
+export type ScopedNumber = number | 'INSUFFICIENT_DATA';
+
+/** Company-wide KPIs (ADMIN scope) — mirrors backend CompanyKpis (Req 6.1, 6.7). */
+export interface CompanyKpis {
+  totalLeads: number;
+  /** Candidate funnel keyed by CandidateStage. */
+  candidateFunnel: Record<string, number>;
+  pendingApprovals: number;
+  /** Divide-by-zero-safe conversion rate: 'INSUFFICIENT_DATA' when no leads. */
+  conversionRate: ScopedNumber;
+}
+
+/** Personal KPIs (SALES scope) — assigned-only data (Req 3.5, 6.3). */
+export interface PersonalKpis {
+  totalLeads: number;
+  leadsByStatus: Record<string, number>;
+}
+
+/** One Recent_Activity_Feed entry (ADMIN only) — mirrors backend ActivityFeedItem (Req 6.6). */
+export interface ActivityFeedItem {
+  actorUserId: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  createdAt: string;
+}
+
+/** Approval_Queue section (ADMIN operational content, drag-and-drop priority). */
+export interface ApprovalQueueSection {
+  draftCount: number;
+  pendingInsightCount: number;
+  total: number;
+  /** Ordered by persisted priorityIndex ascending (drag-and-drop priority). */
+  items: ApprovalQueueItem[];
+}
+
+/**
+ * ADMIN dashboard payload (scope === 'company'): company-wide KPIs plus a
+ * Recent_Activity_Feed. The Approval_Queue / upcoming publishing schedule /
+ * failure alerts are preserved ADMIN operational sections and are optional so
+ * the type degrades gracefully if a future backend omits them.
+ */
+export interface CompanyDashboardOverview {
+  scope: 'company';
+  kpis: CompanyKpis;
+  recentActivity: ActivityFeedItem[];
+  approvalQueue?: ApprovalQueueSection;
+  upcomingPosts?: UpcomingPost[];
+  alerts?: {
     failedPosts: FailedPost[];
   };
-  kpis: {
-    totalLeads: number;
-    leadsByStatus: Record<string, number>;
-  };
-  dataSync: {
-    lastSync: string | null;
-    stale: boolean;
-    status: string;
-    thresholdHours: number;
-  };
+  dataSync: DashboardDataSync;
 }
+
+/**
+ * SALES dashboard payload (scope === 'personal'): personal (assigned-only) KPIs
+ * only — NO company stats and NO activity feed (the backend omits them).
+ */
+export interface PersonalDashboardOverview {
+  scope: 'personal';
+  kpis: PersonalKpis;
+  dataSync: DashboardDataSync;
+}
+
+/** Discriminated union on `scope`, mirroring the backend role-branched payload. */
+export type DashboardOverview = CompanyDashboardOverview | PersonalDashboardOverview;
 
 export interface DashboardNotification {
   type: string;

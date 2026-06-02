@@ -13,8 +13,10 @@
 import type { AgentContext, AgentResult } from '../agents/agent';
 import { readString, readStringArray, readStringRecord } from '../agents/agent';
 import { ContentGenerationAgent } from '../agents/contentGenerationAgent';
+import { EditorAgent } from '../agents/editorAgent';
 import type { GenerationService } from '../content/generationService';
 import type { SchedulingService } from '../content/schedulingService';
+import type { ContentGenerator } from '../strategy/personaService';
 import { AppError } from '../infra/errors';
 import type { StepDefinition, WorkflowDefinition } from './types';
 
@@ -25,12 +27,18 @@ export interface ContentPipelineDeps {
   generationService?: GenerationService;
   /** When provided, step 3 can schedule the approved draft; otherwise no-op. */
   schedulingService?: SchedulingService;
+  /**
+   * Optional Gemini seam for the EditorAgent's summary enrichment (proposal
+   * 3.4). The editorial rubric is deterministic and runs with or without it.
+   */
+  gemini?: ContentGenerator;
 }
 
 /** Build the content pipeline workflow definition from the available deps. */
 export function buildContentPipelineWorkflow(deps: ContentPipelineDeps = {}): WorkflowDefinition {
   const steps: StepDefinition[] = [
     buildGenerateStep(deps.generationService),
+    buildEditorStep(deps.gemini),
     buildReviewStep(),
     buildScheduleStep(deps.schedulingService),
   ];
@@ -46,7 +54,23 @@ function buildGenerateStep(generationService?: GenerationService): StepDefinitio
   return { name: 'generate_content', run: (ctx) => agent.run(ctx) };
 }
 
-/** Step 2: human review gate. The run pauses here; resume re-runs this as a no-op pass. */
+/** Step 2 (Editor — proposal 3.4): score/critique the draft before the human
+ *  gate. Resilient: if no draft content is in context, it passes as a no-op. */
+function buildEditorStep(gemini?: ContentGenerator): StepDefinition {
+  const agent = new EditorAgent(gemini);
+  return {
+    name: 'review_content',
+    run: async (ctx: AgentContext): Promise<AgentResult> => {
+      const hasDraft =
+        readString(ctx.variables, 'title') !== undefined ||
+        readString(ctx.variables, 'body') !== undefined;
+      if (!hasDraft) return { ok: true, output: { editorSkipped: true } };
+      return agent.run(ctx);
+    },
+  };
+}
+
+/** Step 3: human review gate. The run pauses here; resume re-runs this as a no-op pass. */
 function buildReviewStep(): StepDefinition {
   return {
     name: 'await_review',

@@ -24,13 +24,14 @@ export type AnalysisDimension =
   | 'platform_timeslot'
   | 'cta_objective';
 
-/** Audit ledger event types (design Req 20). */
+/** Audit ledger event types (design Req 20; ai-reporting Req 3.5). */
 export type AuditEventType =
   | 'INSIGHT_GENERATED'
   | 'INSIGHT_APPROVED'
   | 'INSIGHT_REJECTED'
   | 'CONFLICT_RESOLVED'
-  | 'STRATEGY_CHANGE_APPLIED';
+  | 'STRATEGY_CHANGE_APPLIED'
+  | 'REPORT_APPROVED';
 
 /** Eleven Content_Features extracted from a draft/scheduled post (design Req 9.1). */
 export interface ContentFeatures {

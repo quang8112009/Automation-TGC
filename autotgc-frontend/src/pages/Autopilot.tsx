@@ -44,9 +44,12 @@ export function Autopilot() {
   const [runId, setRunId] = useState<string | null>(null);
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Autopilot</h1>
+        <div>
+          <div className="eyebrow">Marketing AI</div>
+          <h1 className="page-title">Autopilot</h1>
+        </div>
       </div>
 
       <div className="muted" style={{ marginBottom: 16, maxWidth: 760 }}>
@@ -284,7 +287,7 @@ function RunTimeline({ runId }: { runId: string }) {
           Hãy duyệt nội dung trước khi hệ thống lên lịch đăng.
           <div className="row-actions" style={{ marginTop: 10 }}>
             <button
-              className="btn btn-primary"
+              className="btn btn--secondary"
               disabled={approveMutation.isPending}
               onClick={() => approveMutation.mutate()}
             >

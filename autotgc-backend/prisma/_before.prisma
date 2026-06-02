@@ -1,0 +1,735 @@
+// AutoTGC Phase 1 data model (Foundation + Content Pipeline + Analytics + Leads/Dashboard).
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SALES
+}
+
+enum ContentStatus {
+  DRAFT
+  APPROVED
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  REJECTED
+  FAILED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  LOST
+}
+
+enum InsightStatus {
+  NEW
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model UserAccount {
+  id                String    @id @default(uuid())
+  username          String    @unique
+  email             String
+  passwordHash      String
+  role              Role      @default(ADMIN)
+  failedLoginCount  Int       @default(0)
+  locked            Boolean   @default(false)
+  lockedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  sessions          JwtSession[]
+  assignedLeads     Lead[]
+}
+
+model JwtSession {
+  sessionId        String    @id @default(uuid())
+  userId           String
+  user             UserAccount @relation(fields: [userId], references: [id])
+  status           String    @default("ACTIVE") // ACTIVE | REVOKED
+  accessExpiresAt  DateTime
+  refreshExpiresAt DateTime
+  createdAt        DateTime  @default(now())
+  revokedAt        DateTime?
+}
+
+model PlatformToken {
+  id                       String    @id @default(uuid())
+  platform                 String    @unique
+  type                     String    // access_token | refresh_token | api_key | service_account
+  expiresAt                DateTime?
+  refreshWindowSeconds     Int       @default(86400)
+  status                   String    @default("VALID")
+  lastRefreshFailureReason String?
+  updatedAt                DateTime  @updatedAt
+}
+
+model DomainContext {
+  id                  String   @id @default(uuid())
+  domainName          String   @unique
+  contextDescription  String   @default("")
+  defaultToneOfVoice  String   @default("friendly")
+  createdAt           DateTime @default(now())
+  personas            ContentPersona[]
+  drafts              ContentDraft[]
+}
+
+model ContentPersona {
+  id              String   @id @default(uuid())
+  domainId        String
+  domain          DomainContext @relation(fields: [domainId], references: [id])
+  personaName     String
+  age             String
+  interests       String   @default("")
+  targetNeeds     String
+  painPoints      String
+  toneOfVoice     String
+  recommendedTone String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  drafts          ContentDraft[]
+}
+
+model ContentDraft {
+  id                       String   @id @default(uuid())
+  domainId                 String
+  domain                   DomainContext @relation(fields: [domainId], references: [id])
+  personaId                String
+  persona                  ContentPersona @relation(fields: [personaId], references: [id])
+  objective                String
+  title                    String
+  body                     String
+  status                   ContentStatus @default(DRAFT)
+  generatedWithoutFeedback Boolean  @default(false)
+  rejectionReason          String?
+  previewPresented         Boolean  @default(false)
+  // --- AI marketing autopilot (additive; safe defaults keep existing flow intact) ---
+  format                   String   @default("GENERIC") // GENERIC|SEO_ARTICLE|FANPAGE_CAPTION|VIDEO_SCRIPT|EMAIL|CARE_MESSAGE|CHATBOT_FAQ
+  market                   String? // market code: JAPAN|KOREA|GERMANY|TAIWAN|AUSTRALIA|LITHUANIA|EUROPE|...
+  language                 String   @default("vi")
+  planItemId               String?
+  seoKeywords              Json     @default("[]")
+  // Approval_Queue manual priority ordering (additive; default keeps deadline-based order)
+  priorityIndex            Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  ctas                     DraftCta[]
+  media                    MediaAsset[]
+  scheduledPosts           ScheduledPost[]
+  generatedAssets          GeneratedAsset[]
+}
+
+model DraftCta {
+  id       String @id @default(uuid())
+  draftId  String
+  draft    ContentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  ctaText  String
+}
+
+model MediaAsset {
+  id         String   @id @default(uuid())
+  draftId    String
+  draft      ContentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  kind       String   // image | video | photo_carousel
+  storageKey String
+  mimeType   String
+  createdAt  DateTime @default(now())
+}
+
+model ScheduledPost {
+  id             String   @id @default(uuid())
+  draftId        String
+  draft          ContentDraft @relation(fields: [draftId], references: [id])
+  platform       String
+  scheduledAt    DateTime
+  status         ContentStatus @default(SCHEDULED)
+  idempotencyKey String   @unique
+  externalPostId String?
+  postUrl        String?
+  errorCode      String?
+  failureReason  String?
+  retryCount     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([platform, idempotencyKey])
+}
+
+model AnalyticsRecord {
+  id              String   @id @default(uuid())
+  publishedPostId String
+  platform        String
+  views           Int?
+  likes           Int?
+  shares          Int?
+  comments        Int?
+  follows         Int?
+  leads           Int?
+  clickThrough    Int?
+  reach           Int?
+  collectedAt     DateTime @default(now())
+}
+
+model PerformanceRecord {
+  id              String   @id @default(uuid())
+  postId          String
+  domainCategory  String
+  contentTopic    String
+  personaId       String
+  toneOfVoice     String
+  objective       String
+  platform        String
+  postTimeSlot    String
+  contentLength   Int
+  hasCta          Boolean
+  ctaType         String
+  mediaType       String
+  conversionRate  Float
+  engagementRate  Float
+  ctaClickRate    Float
+  followRate      Float?
+  performanceLabel String
+  scoredAt        DateTime @default(now())
+}
+
+model LearningInsight {
+  id              String   @id @default(uuid())
+  insightType     String
+  insightStatus   InsightStatus @default(NEW)
+  subject         Json
+  metrics         Json
+  recommendedChange Json
+  modifiedChange  Json?
+  confidenceScore Float
+  sampleSize      Int
+  analysisPeriod  String
+  rejectionReason String?
+  generatedAt     DateTime @default(now())
+  // Approval_Queue manual priority ordering (additive; default keeps deadline-based order)
+  priorityIndex   Int      @default(0)
+}
+
+model AiPromptContext {
+  id                       String   @id @default(uuid())
+  contextVersion           String
+  lastUpdatedFromAnalytics DateTime?
+  topPerformingTopics      Json
+  bestCtaPatterns          Json
+  avoidTopics              Json
+  optimalContentLength     Json
+  toneRecommendations      Json
+  optimalSchedules         Json
+}
+
+model AuditEntry {
+  id         String   @id @default(uuid())
+  eventType  String
+  insightId  String
+  actor      String
+  detail     Json
+  recordedAt DateTime @default(now())
+}
+
+model Lead {
+  leadId         String   @id @default(uuid())
+  name           String?
+  phone          String?
+  email          String?
+  source         String
+  platform       String
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  contentPostId  String
+  domainCategory String?
+  contentTopic   String?
+  status         LeadStatus @default(NEW)
+  note           String?
+  assignedTo     String?
+  assignee       UserAccount? @relation(fields: [assignedTo], references: [id])
+  unattributed   Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  history        LeadHistoryEntry[]
+
+  @@index([source])
+  @@index([platform])
+  @@index([status])
+  @@index([createdAt])
+  @@index([contentPostId])
+  @@index([domainCategory, contentTopic])
+  @@index([assignedTo])
+}
+
+model LeadHistoryEntry {
+  id             String   @id @default(uuid())
+  leadId         String
+  lead           Lead     @relation(fields: [leadId], references: [leadId], onDelete: Cascade)
+  previousStatus String
+  newStatus      String
+  note           String?
+  assignedTo     String?
+  actor          String
+  changedAt      DateTime @default(now())
+}
+
+model TokenAlert {
+  id        String   @id @default(uuid())
+  platform  String
+  kind      String
+  reason    String?
+  raisedAt  DateTime @default(now())
+}
+
+// --- Service accounts (Foundation Req 8): non-interactive internal identities ---
+model ServiceAccount {
+  id             String              @id @default(uuid())
+  name           String              @unique // 'ai-system' | 'background-worker'
+  credentialHash String
+  active         Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  permissions    ServicePermission[]
+}
+
+model ServicePermission {
+  id               String         @id @default(uuid())
+  serviceAccountId String
+  serviceAccount   ServiceAccount @relation(fields: [serviceAccountId], references: [id], onDelete: Cascade)
+  module           String
+  action           String
+
+  @@unique([serviceAccountId, module, action])
+}
+
+// --- Lead assignment lookup (Foundation Req 6.3, 6.7): SALES assigned-lead checks ---
+model LeadAssignment {
+  id         String   @id @default(uuid())
+  leadId     String   @unique
+  userId     String
+  assignedAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// --- Agentic orchestration state (State Management) ---
+// A WorkflowRun tracks a multi-step agentic pipeline (e.g. generate -> review ->
+// schedule -> publish) as a persisted saga with per-step status + context.
+enum WorkflowStatus {
+  PENDING
+  RUNNING
+  WAITING_APPROVAL
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model WorkflowRun {
+  id          String         @id @default(uuid())
+  type        String // e.g. 'content_pipeline'
+  status      WorkflowStatus @default(PENDING)
+  currentStep String?
+  context     Json // accumulated inputs/outputs across steps
+  error       String?
+  createdBy   String? // user id or service account name
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  steps       WorkflowStep[]
+
+  @@index([status])
+  @@index([type])
+}
+
+model WorkflowStep {
+  id         String      @id @default(uuid())
+  runId      String
+  run        WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  name       String
+  status     String      @default("PENDING") // PENDING | RUNNING | DONE | FAILED | SKIPPED
+  input      Json?
+  output     Json?
+  error      String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  orderIndex Int
+
+  @@index([runId])
+}
+
+// ===========================================================================
+// Recruitment CRM (labor-export / XKLĐ) — additive domain for Thanh Giang.
+//
+// Adapts the platform from a generic marketing-lead CRM into a labor-export
+// candidate CRM: JobOrder (đơn hàng tuyển dụng), CandidateProfile (ứng viên)
+// with a recruitment pipeline state machine, Branch (chi nhánh), and a
+// KnowledgeEntry store used to ground the AI recruitment-consultant agent.
+// All models are additive; the existing Lead remains the raw inbound contact
+// and a Lead may be promoted into a CandidateProfile (lead -> candidate).
+// ===========================================================================
+
+enum RecruitmentMarket {
+  JAPAN
+  GERMANY
+  KOREA
+  TAIWAN
+  DOMESTIC
+  OTHER
+}
+
+enum VisaType {
+  TOKUTEI // Kỹ năng đặc định (SSW)
+  ENGINEER // Kỹ sư - Nhân viên
+  TRAINEE // Thực tập sinh (TTS)
+  STUDENT // Du học / Sinh viên thực tập
+  GERMANY_PROGRAM // XKLĐ Đức
+  KOREA_EPS // Hàn Quốc (EPS)
+  DOMESTIC_JOB // Việc làm trong nước
+  OTHER
+}
+
+enum JobOrderStatus {
+  OPEN
+  PAUSED
+  CLOSED
+  FILLED
+}
+
+enum CandidateStage {
+  NEW
+  CONSULTING
+  PROFILE_COLLECTED
+  MATCHED
+  INTERVIEW_SCHEDULED
+  INTERVIEW_PASSED
+  COE_VISA
+  DEPARTED
+  WITHDRAWN
+  REJECTED
+}
+
+model Branch {
+  id         String             @id @default(uuid())
+  code       String             @unique
+  name       String
+  city       String             @default("")
+  address    String             @default("")
+  phone      String             @default("")
+  createdAt  DateTime           @default(now())
+  candidates CandidateProfile[]
+  jobOrders  JobOrder[]
+}
+
+model JobOrder {
+  id             String            @id @default(uuid())
+  code           String            @unique // e.g. KN6131
+  title          String
+  industry       String            @default("") // nghề: Xây dựng, Điều dưỡng, ...
+  visaType       VisaType          @default(TOKUTEI)
+  market         RecruitmentMarket @default(JAPAN)
+  workLocation   String            @default("") // prefecture / region
+  salaryText     String            @default("") // display, e.g. "42-57tr"
+  salaryMinVndM  Int? // million VND (optional, for filtering)
+  salaryMaxVndM  Int?
+  quantity       Int               @default(1)
+  gender         String            @default("ANY") // MALE | FEMALE | ANY
+  nationalityReq String            @default("")
+  status         JobOrderStatus    @default(OPEN)
+  deadline       DateTime?
+  description    String            @default("")
+  sourcePostId   String? // link to a published ScheduledPost/content when applicable
+  branchId       String?
+  branch         Branch?           @relation(fields: [branchId], references: [id])
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  candidates     CandidateProfile[]
+
+  @@index([market])
+  @@index([visaType])
+  @@index([industry])
+  @@index([status])
+  @@index([code])
+}
+
+model CandidateProfile {
+  id                String                  @id @default(uuid())
+  leadId            String?                 @unique // links to the originating Lead contact when present
+  fullName          String
+  phone             String?
+  email             String?
+  dob               DateTime?
+  gender            String                  @default("") // MALE | FEMALE | ""
+  hometown          String                  @default("")
+  education         String                  @default("")
+  currentJob        String                  @default("")
+  desiredMarket     RecruitmentMarket?
+  desiredIndustry   String                  @default("")
+  desiredVisaType   VisaType?
+  japaneseLevel     String                  @default("NONE") // NONE | N5 | N4 | N3 | N2 | N1
+  otherLanguage     String                  @default("")
+  stage             CandidateStage          @default(NEW)
+  matchedJobOrderId String?
+  matchedJobOrder   JobOrder?               @relation(fields: [matchedJobOrderId], references: [id])
+  branchId          String?
+  branch            Branch?                 @relation(fields: [branchId], references: [id])
+  assignedTo        String? // consultant userId
+  note              String?
+  source            String                  @default("")
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  history           CandidateStageHistory[]
+  documents         DocumentChecklistItem[]
+
+  @@index([stage])
+  @@index([desiredMarket])
+  @@index([assignedTo])
+  @@index([matchedJobOrderId])
+  @@index([branchId])
+}
+
+model CandidateStageHistory {
+  id            String           @id @default(uuid())
+  candidateId   String
+  candidate     CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  previousStage String
+  newStage      String
+  note          String?
+  actor         String
+  changedAt     DateTime         @default(now())
+}
+
+// Knowledge base used to ground the AI recruitment-consultant agent. Each entry
+// is a small piece of company/market/visa/industry/FAQ context the agent
+// retrieves to produce relevant XKLĐ content and consulting answers.
+model KnowledgeEntry {
+  id        String   @id @default(uuid())
+  category  String // company | market | visa | industry | faq | process | branch
+  title     String
+  content   String
+  tags      Json     @default("[]")
+  market    String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([active])
+}
+
+// ===========================================================================
+// AI Marketing Autopilot (additive) — trend research, market content planning,
+// multi-format generation, brand-template visual/video asset generation, and
+// the autopilot orchestration that ties research -> plan -> generate -> review
+// -> schedule -> publish -> measure -> optimize into a data-driven loop.
+//
+// Design principle (per product goal): NOT "post a lot", but produce
+// high-performance content that drives traffic / follows / leads. The planner
+// and generators consume the analytics AiPromptContext so output is biased
+// toward what actually performs.
+// ===========================================================================
+
+enum TrendStatus {
+  DISCOVERED
+  REVIEWED
+  ADOPTED
+  DISMISSED
+}
+
+// A researched market trend / keyword / high-demand topic. Produced by the
+// TrendResearchService (AI + heuristics) and reviewed before driving a plan.
+model TrendSignal {
+  id          String      @id @default(uuid())
+  market      String // JAPAN|KOREA|GERMANY|TAIWAN|AUSTRALIA|LITHUANIA|EUROPE|...
+  keyword     String
+  topic       String      @default("")
+  intent      String      @default("") // e.g. salary | visa | industry | cost | eligibility
+  demandScore Float       @default(0) // 0..100 estimated demand/interest
+  rationale   String      @default("")
+  sources     Json        @default("[]")
+  status      TrendStatus @default(DISCOVERED)
+  discoveredAt DateTime   @default(now())
+
+  @@index([market])
+  @@index([status])
+  @@index([keyword])
+}
+
+enum ContentPlanStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+// A per-market content plan (kế hoạch nội dung) for a date range, produced by
+// the ContentPlanner from trends + analytics context.
+model ContentPlan {
+  id        String            @id @default(uuid())
+  market    String
+  title     String
+  objective String            @default("Lead") // Lead|View|Follow
+  periodFrom DateTime
+  periodTo  DateTime
+  status    ContentPlanStatus @default(DRAFT)
+  notes     String            @default("")
+  createdBy String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  items     ContentPlanItem[]
+
+  @@index([market])
+  @@index([status])
+}
+
+// One scheduled idea inside a plan: which format, channel, topic, target date.
+model ContentPlanItem {
+  id          String   @id @default(uuid())
+  planId      String
+  plan        ContentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  market      String
+  channel     String // facebook|tiktok|youtube|website|zalo|email
+  format      String // SEO_ARTICLE|FANPAGE_CAPTION|VIDEO_SCRIPT|EMAIL|CARE_MESSAGE|CHATBOT_FAQ
+  topic       String
+  keyword     String   @default("")
+  objective   String   @default("Lead")
+  targetDate  DateTime?
+  status      String   @default("PLANNED") // PLANNED|GENERATED|SCHEDULED|PUBLISHED|SKIPPED
+  draftId     String?
+  trendId     String?
+  orderIndex  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([planId])
+  @@index([status])
+}
+
+// A generated visual/video asset (thumbnail, infographic, poster, short video)
+// produced from a brand template. When an image/video generation provider is
+// configured it holds the produced file's storage key; otherwise it holds a
+// deterministic render SPEC (brand template + resolved copy) so production is
+// not blocked and a human/designer or a later provider can render it.
+model GeneratedAsset {
+  id          String   @id @default(uuid())
+  draftId     String?
+  draft       ContentDraft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  kind        String // thumbnail|infographic|poster|short_video|image
+  templateId  String?
+  prompt      String   @default("")
+  spec        Json     @default("{}") // resolved brand-template render spec
+  status      String   @default("SPEC_READY") // SPEC_READY|RENDERING|RENDERED|FAILED
+  storageKey  String? // set when actually rendered by a provider
+  mimeType    String?
+  provider    String   @default("none")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([draftId])
+  @@index([kind])
+  @@index([status])
+}
+
+// Brand template definitions (thương hiệu) used to render visual assets
+// consistently: palette, fonts, logo placement, layout per asset kind.
+model BrandTemplate {
+  id         String   @id @default(uuid())
+  name       String   @unique
+  kind       String // thumbnail|infographic|poster|short_video
+  spec       Json     @default("{}") // colors, fonts, logo, layout slots
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([kind])
+  @@index([active])
+}
+
+// ===========================================================================
+// AI Reporting & Ops Enhancements (additive) — company WEEKLY/MONTHLY AI
+// reports, candidate document checklists, and a configurable default document
+// catalog per recruitment market. All models/enums below are additive and do
+// not modify existing models/fields.
+// ===========================================================================
+
+enum ReportType {
+  WEEKLY
+  MONTHLY
+}
+
+enum ReportStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  ARCHIVED
+  INSUFFICIENT_DATA
+}
+
+enum DocSubmissionStatus {
+  PENDING
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+enum DocSource {
+  DEFAULT
+  CUSTOM
+}
+
+// AI-generated company report for a WEEKLY/MONTHLY period. Created in DRAFT
+// (review mode) or INSUFFICIENT_DATA when no valid records exist; transitions
+// are guarded by Report_State_Machine.
+model CompanyReport {
+  id          String       @id @default(uuid())
+  reportType  ReportType
+  periodFrom  DateTime
+  periodTo    DateTime
+  periodLabel String // e.g. "2024-W23" | "2024-06"
+  status      ReportStatus @default(DRAFT)
+  content     Json // serialized ReportContent
+  aiGenerated Boolean      @default(false)
+  scopeUserId String? // null = company-wide scope (ADMIN)
+  createdBy   String? // userId | 'background-worker'
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([reportType, periodLabel, scopeUserId])
+  @@index([reportType, periodFrom])
+  @@index([status])
+}
+
+// A single document-checklist item attached to a candidate. Cascade-deleted
+// with its CandidateProfile.
+model DocumentChecklistItem {
+  id          String              @id @default(uuid())
+  candidateId String
+  candidate   CandidateProfile    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  type        String // stable document-type code (e.g. PASSPORT, HEALTH_CHECK)
+  label       String // display label
+  status      DocSubmissionStatus @default(PENDING)
+  required    Boolean             @default(true)
+  source      DocSource           @default(DEFAULT)
+  note        String?
+  submittedAt DateTime? // set when status moves to SUBMITTED
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+// ADMIN-configurable default document set per recruitment market. Editing the
+// catalog does not affect already-created DocumentChecklistItem rows.
+model DocumentTypeCatalog {
+  id        String   @id @default(uuid())
+  market    String   @unique // RecruitmentMarket code: JAPAN|KOREA|GERMANY|TAIWAN|DOMESTIC|OTHER
+  docs      Json     @default("[]") // DocTypeDef[]: { type, label, required }
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}

@@ -116,6 +116,33 @@ export function buildPrompt(inputs: PromptInputs, ctx: PerformanceContext | null
   return segments.join('\n');
 }
 
+/**
+ * Pure regeneration prompt builder for the Self-Correction loop (proposal 3.1).
+ * Reuses the base prompt, then appends the PREVIOUS rejected draft and the
+ * human's rejection reason with an explicit instruction to revise — so the
+ * model rewrites the same brief addressing the feedback instead of starting
+ * blind. The required-CTA/JSON instruction from `buildPrompt` stays last.
+ */
+export function buildRegenerationPrompt(
+  inputs: PromptInputs,
+  previous: { title: string; body: string; ctas: string[] },
+  rejectionReason: string,
+  ctx: PerformanceContext | null,
+): string {
+  const base = buildPrompt(inputs, ctx);
+  const revision = [
+    '[PreviousDraft] A previous draft was REJECTED by a human reviewer. Rewrite it.',
+    `Previous title: ${previous.title}`,
+    `Previous body: ${previous.body}`,
+    `Previous CTAs: ${previous.ctas.join(' | ')}`,
+    `[RejectionReason] The reviewer asked for these changes: ${rejectionReason}`,
+    '[RevisionInstruction] Produce an improved version that directly addresses the ' +
+      'rejection reason while keeping the same domain, persona, tone and objective. ' +
+      'Respond in the SAME JSON shape ("title", "body", "ctas").',
+  ].join('\n');
+  return `${base}\n${revision}`;
+}
+
 export class GenerationService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -209,6 +236,104 @@ export class GenerationService {
     });
 
     return { draft, generatedWithoutFeedback };
+  }
+
+  /**
+   * Self-Correction loop (proposal 3.1): rewrite a REJECTED-then-returned draft
+   * in place using the reviewer's rejection reason, instead of discarding it.
+   *
+   * The draft must currently be in DRAFT (the Review_Service returns rejected
+   * drafts to DRAFT and stores `rejectionReason`). We rebuild the original
+   * prompt context (domain + persona + analytics) and append the previous draft
+   * + rejection reason via `buildRegenerationPrompt`, call Gemini, and overwrite
+   * the draft's title/body/CTAs with the revision. A Gemini failure persists
+   * nothing and surfaces the error (mirrors `generate`). The reviewer must
+   * re-preview before approving (we reset `previewPresented`).
+   */
+  async regenerateFromRejection(draftId: string, reasonOverride?: string): Promise<GenerationResult> {
+    const draft = await this.prisma.contentDraft.findUnique({
+      where: { id: draftId },
+      include: { ctas: true, domain: true, persona: true },
+    });
+    if (!draft) {
+      throw new NotFoundError('Draft not found', 'DRAFT_NOT_FOUND');
+    }
+    if (draft.status !== 'DRAFT') {
+      throw new ValidationError(
+        'Only a draft in DRAFT status can be regenerated',
+        'REGEN_STATUS_INVALID',
+      );
+    }
+    const reason = (reasonOverride ?? draft.rejectionReason ?? '').trim();
+    if (reason.length === 0) {
+      throw new ValidationError(
+        'A rejection reason is required to regenerate a draft',
+        'REGEN_REASON_REQUIRED',
+      );
+    }
+
+    // Cold-start safe context load (never throws for missing context).
+    let ctx: PerformanceContext | null = null;
+    try {
+      ctx = await this.aiContextReader.get();
+    } catch {
+      ctx = null;
+    }
+    const complete = isPerformanceContextComplete(ctx);
+    const generatedWithoutFeedback = !complete;
+
+    const persona = draft.persona;
+    const toneOfVoice =
+      persona.recommendedTone?.trim() ||
+      persona.toneOfVoice?.trim() ||
+      draft.domain.defaultToneOfVoice?.trim() ||
+      DEFAULT_TONE;
+
+    const inputs: PromptInputs = {
+      domainName: draft.domain.domainName,
+      domainContext: draft.domain.contextDescription,
+      personaSummaries: [
+        `${persona.personaName} (age ${persona.age}; needs: ${persona.targetNeeds}; pains: ${persona.painPoints})`,
+      ],
+      toneOfVoice,
+      objective: (draft.objective as Objective) ?? 'Lead',
+    };
+
+    const prompt = buildRegenerationPrompt(
+      inputs,
+      {
+        title: draft.title,
+        body: draft.body,
+        ctas: draft.ctas.map((c) => c.ctaText),
+      },
+      reason,
+      complete ? ctx : null,
+    );
+
+    // A Gemini failure must persist nothing and surface the error.
+    const text = await this.gemini.generateContent(prompt);
+    const parsed = parseGeneratedContent(text);
+
+    // Overwrite the draft in place: replace CTAs, refresh title/body, reset the
+    // preview gate, keep status DRAFT, and clear the consumed rejection reason.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.draftCta.deleteMany({ where: { draftId } });
+      return tx.contentDraft.update({
+        where: { id: draftId },
+        data: {
+          title: parsed.title,
+          body: parsed.body,
+          status: 'DRAFT',
+          previewPresented: false,
+          rejectionReason: null,
+          generatedWithoutFeedback,
+          ctas: { create: parsed.ctas.map((ctaText) => ({ ctaText })) },
+        },
+        include: { ctas: true },
+      });
+    });
+
+    return { draft: updated, generatedWithoutFeedback };
   }
 }
 

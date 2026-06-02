@@ -13,6 +13,16 @@ import { readString, readStringArray } from './agent';
 import { AppError } from '../infra/errors';
 import type { GenerationService } from '../content/generationService';
 
+/** Extract CTA texts from a generated draft that may include a `ctas` relation. */
+function extractCtaTexts(draft: unknown): string[] {
+  if (typeof draft !== 'object' || draft === null) return [];
+  const ctas = (draft as { ctas?: unknown }).ctas;
+  if (!Array.isArray(ctas)) return [];
+  return ctas
+    .map((c) => (typeof c === 'object' && c !== null ? (c as { ctaText?: unknown }).ctaText : undefined))
+    .filter((t): t is string => typeof t === 'string');
+}
+
 /** The variable keys this agent consumes from the workflow context. */
 export const CONTENT_GENERATION_INPUT_KEYS = ['domainName', 'personaIds', 'objective'] as const;
 
@@ -37,6 +47,12 @@ export class ContentGenerationAgent implements Agent {
         output: {
           draftId: result.draft.id,
           generatedWithoutFeedback: result.generatedWithoutFeedback,
+          // Surface the drafted content so a downstream EditorAgent (proposal
+          // 3.4) can score it without an extra DB read.
+          title: result.draft.title,
+          body: result.draft.body,
+          ctas: extractCtaTexts(result.draft),
+          objective: result.draft.objective,
         },
       };
     } catch (err) {

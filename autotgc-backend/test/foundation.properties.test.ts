@@ -273,7 +273,9 @@ describe('foundation-and-deployment auth properties', () => {
       // argon2id hashing is intentionally slow; keep the case count small.
       { numRuns: 20 },
     );
-  });
+    // argon2id is CPU/memory-hard; under the full suite's parallel workers the
+    // default 5s timeout can be exceeded purely from contention. Give it room.
+  }, 30_000);
 
   // Feature: foundation-and-deployment, Property 3: Token issuance produces correct lifetimes and claims
   it('Property 3: access exp-iat == 24h, refresh exp-iat == 30d, claims match; refresh keeps {sub,role,sid}', async () => {

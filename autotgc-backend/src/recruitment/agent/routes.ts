@@ -3,8 +3,11 @@
  * (customer: Thanh Giang Conincon). Thin layer: shapes requests/responses,
  * wires auth + RBAC, and delegates to RecruitmentConsultantAgent / KnowledgeService.
  *
- * RBAC: every route is behind requireAuth + rbacGuard with module 'generation'
- * (ADMIN-only by current policy — SALES is denied on the generation module).
+ * RBAC: the consult/draft + knowledge routes are behind requireAuth + rbacGuard
+ * with module 'generation' (ADMIN-only by current policy — SALES is denied on
+ * the generation module). The Work_Assistant route (/api/v1/ai/assistant) is
+ * mapped to module 'dashboard'/'read' so BOTH ADMIN and SALES can reach it; its
+ * role-based business-data scoping is enforced inside WorkAssistant.
  *
  * The consult/draft endpoints NEVER surface a 502 "AI not configured": the agent
  * returns a deterministic grounded fallback instead, so the feature works with
@@ -15,11 +18,12 @@ import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../../auth/jwt';
 import type { ContentGenerator } from '../../strategy/personaService';
-import { requireAuth, rbacGuard } from '../../http/authMiddleware';
+import { requireAuth, rbacGuard, getAuth } from '../../http/authMiddleware';
 import { NotFoundError, ValidationError } from '../../infra/errors';
 import { KnowledgeService } from '../knowledge/knowledgeService';
 import { RecruitmentConsultantAgent } from './consultantAgent';
 import type { CandidateContext } from './consultantAgent';
+import { WorkAssistant } from './workAssistant';
 
 export interface RecruitmentAgentRouteDeps {
   prisma: PrismaClient;
@@ -67,12 +71,22 @@ export function registerRecruitmentAgentRoutes(
   const { prisma, jwt, gemini } = deps;
   const knowledge = new KnowledgeService(prisma);
   const agent = new RecruitmentConsultantAgent(knowledge, gemini);
+  const assistant = new WorkAssistant(knowledge, gemini);
   const auth = requireAuth({ prisma, jwt });
 
-  // All AI + knowledge routes use the 'generation' module (ADMIN-only policy).
+  // The consultant + knowledge-admin routes use the 'generation' module
+  // (ADMIN-only policy; SALES is denied).
   const genRead = rbacGuard(() => ({ module: 'generation', action: 'read' }));
   const genCreate = rbacGuard(() => ({ module: 'generation', action: 'create' }));
   const genUpdate = rbacGuard(() => ({ module: 'generation', action: 'update' }));
+
+  // The Work_Assistant must be reachable by BOTH ADMIN and SALES (Req 6 covers
+  // all authenticated employees). The RBAC policy in `auth/rbac.ts` denies SALES
+  // on 'generation' but ALLOWS SALES a read on 'dashboard'; ADMIN is allowed
+  // everywhere. So we map this guard to { module: 'dashboard', action: 'read' }
+  // to let both roles through while keeping `rbac.ts` pure (Req 7.4). Role-based
+  // business-data scoping is enforced inside WorkAssistant (Req 7.1–7.3).
+  const assistantGuard = rbacGuard(() => ({ module: 'dashboard', action: 'read' }));
 
   // ---- AI consult ------------------------------------------------------------
   app.post(
@@ -161,6 +175,37 @@ export function registerRecruitmentAgentRoutes(
 
       const result = await agent.draftOutreach(candidateContextFromProfile(profile), jobOrder);
       return reply.code(200).send(result);
+    },
+  );
+
+  // ---- Work_Assistant (Trợ lý Công việc TGC) --------------------------------
+  // POST /api/v1/ai/assistant — internal employee Q&A grounded on the active
+  // Knowledge_Base. Reachable by ADMIN and SALES (assistantGuard). The answer is
+  // Gemini-phrased when configured (aiGenerated:true) or a deterministic grounded
+  // fallback otherwise (aiGenerated:false) — it never surfaces a 502. Role-based
+  // business-data scoping is handled inside the service (Req 7.1–7.3).
+  app.post(
+    '/api/v1/ai/assistant',
+    { preHandler: [auth, assistantGuard] },
+    async (request, reply) => {
+      const principal = getAuth(request);
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const question = asString(body.question);
+      if (!question) {
+        // Empty / whitespace-only question after trim -> 400 (Req 6.5).
+        throw new ValidationError('question is required', 'AI_QUESTION_REQUIRED');
+      }
+
+      const result = await assistant.ask({
+        question,
+        role: principal.role,
+        userId: principal.userId,
+      });
+      return reply.code(200).send({
+        answer: result.answer,
+        sources: result.sources,
+        aiGenerated: result.aiGenerated,
+      });
     },
   );
 

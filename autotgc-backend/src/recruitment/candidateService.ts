@@ -20,10 +20,12 @@ import {
 import type { CandidateStage } from './candidateStateMachine';
 import {
   ConflictError,
+  ForbiddenError,
   NotFoundError,
   ValidationError,
 } from '../infra/errors';
 import type { EventBus } from '../infra/events';
+import type { OversightService } from '../oversight/oversightService';
 
 export interface CreateCandidateInput {
   leadId?: string | null;
@@ -142,6 +144,7 @@ export class CandidateService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly eventBus?: EventBus,
+    private readonly oversight?: OversightService,
   ) {}
 
   /** Best-effort notification on stage changes; never blocks the write path. */
@@ -217,6 +220,7 @@ export class CandidateService {
     const ne = normalizeEmail(email);
     if (!np && !ne) return null;
 
+    // Fast path: exact-variant + case-insensitive email match at the DB layer.
     const or: Prisma.CandidateProfileWhereInput[] = [];
     if (np) {
       const intl = np.startsWith('0') ? `+84${np.slice(1)}` : np;
@@ -231,6 +235,22 @@ export class CandidateService {
     for (const c of candidates) {
       if (np && normalizePhone(c.phone) === np) return c;
       if (ne && normalizeEmail(c.email) === ne) return c;
+    }
+
+    // Fallback: a stored phone formatted differently (spaces/dots/dashes) won't
+    // match the exact-variant `in` filter above, so it would slip past dedup.
+    // Re-check by normalizing every stored phone in app. Scoped to rows that
+    // actually have a phone and bounded in columns; dedup only runs on
+    // create/promote (low frequency) so this is acceptable for the CRM size.
+    if (np) {
+      const withPhone = await this.prisma.candidateProfile.findMany({
+        where: { phone: { not: null } },
+        select: { id: true, phone: true },
+      });
+      const hit = withPhone.find((c) => normalizePhone(c.phone) === np);
+      if (hit) {
+        return this.prisma.candidateProfile.findUnique({ where: { id: hit.id } });
+      }
     }
     return null;
   }
@@ -351,6 +371,12 @@ export class CandidateService {
     if (!candidate) {
       throw new NotFoundError('Candidate not found');
     }
+    // SALES may only access its own assigned candidates (mirrors LeadService).
+    // Enforced here too because an UNASSIGNED candidate (assignedTo null) would
+    // otherwise bypass the route guard, whose ownerUserId would be undefined.
+    if (actor.role === 'SALES' && candidate.assignedTo !== actor.userId) {
+      throw new ForbiddenError();
+    }
     const history = await this.prisma.candidateStageHistory.findMany({
       where: { candidateId: id },
       orderBy: { changedAt: 'desc' },
@@ -469,6 +495,11 @@ export class CandidateService {
     if (!candidate) {
       throw new NotFoundError('Candidate not found');
     }
+    // SALES may only update its own assigned candidates (mirrors LeadService;
+    // guards the unassigned-candidate gap the route-level owner check misses).
+    if (actor.role === 'SALES' && candidate.assignedTo !== actor.userId) {
+      throw new ForbiddenError();
+    }
     this.validateOptionalEnums(input);
     const dob = parseDob(input.dob);
 
@@ -538,6 +569,16 @@ export class CandidateService {
         },
       });
       await this.emitStageChange(updated, previousStage, newStage);
+      // Central oversight emit point (Req 7.2, 7.4, 7.6): one ActivityLog + one
+      // Notification per ADMIN. Best-effort (swallows its own errors), called
+      // after the stage change is committed; reuses previousStage/newStage.
+      await this.oversight?.record({
+        actorUserId: actor.userId,
+        action: 'CANDIDATE_STAGE_CHANGED',
+        targetType: 'candidate',
+        targetId: id,
+        detail: { previousStage, newStage },
+      });
     }
 
     return updated;
@@ -551,6 +592,10 @@ export class CandidateService {
     const candidate = await this.prisma.candidateProfile.findUnique({ where: { id: candidateId } });
     if (!candidate) {
       throw new NotFoundError('Candidate not found');
+    }
+    // SALES may only act on its own assigned candidates (mirrors LeadService).
+    if (actor.role === 'SALES' && candidate.assignedTo !== actor.userId) {
+      throw new ForbiddenError();
     }
     const jobOrder = await this.prisma.jobOrder.findUnique({ where: { id: jobOrderId } });
     if (!jobOrder) {
@@ -586,6 +631,15 @@ export class CandidateService {
       },
     });
     await this.emitStageChange(updated, previousStage, 'MATCHED');
+    // Central oversight emit point (Req 7.2, 7.4, 7.6): one ActivityLog + one
+    // Notification per ADMIN. Best-effort, after the stage change is committed.
+    await this.oversight?.record({
+      actorUserId: actor.userId,
+      action: 'CANDIDATE_STAGE_CHANGED',
+      targetType: 'candidate',
+      targetId: candidateId,
+      detail: { previousStage, newStage: 'MATCHED' },
+    });
 
     return updated;
   }

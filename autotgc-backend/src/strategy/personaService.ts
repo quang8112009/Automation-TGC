@@ -60,11 +60,78 @@ export function validatePersona(input: PersonaInput): void {
   }
 }
 
+/** Filter for listing personas. */
+export interface PersonaListFilter {
+  /** Restrict to personas under a specific domain name. */
+  domainName?: string;
+}
+
+/** A persona row enriched with its domain name for list/read views. */
+export type PersonaWithDomain = ContentPersona & { domainName: string };
+
+/** Paginated persona list result. */
+export interface PersonaListResult {
+  items: PersonaWithDomain[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export class PersonaService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly gemini: ContentGenerator,
   ) {}
+
+  /**
+   * List personas (newest first), optionally filtered by domain name, with
+   * pagination. Each row carries its `domainName` so the UI can group/display
+   * without a second lookup. This is the read endpoint the Strategy page needs
+   * to render previously-created personas (not just session-local ones).
+   */
+  async list(
+    filter: PersonaListFilter = {},
+    page = 1,
+    limit = 50,
+  ): Promise<PersonaListResult> {
+    const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 200) : 50;
+
+    const where = filter.domainName?.trim()
+      ? { domain: { domainName: filter.domainName.trim() } }
+      : {};
+
+    const [rows, total] = await Promise.all([
+      this.prisma.contentPersona.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (safePage - 1) * safeLimit,
+        take: safeLimit,
+        include: { domain: { select: { domainName: true } } },
+      }),
+      this.prisma.contentPersona.count({ where }),
+    ]);
+
+    const items: PersonaWithDomain[] = rows.map((r) => {
+      const { domain, ...persona } = r as ContentPersona & { domain: { domainName: string } };
+      return { ...(persona as ContentPersona), domainName: domain.domainName };
+    });
+
+    return { items, total, page: safePage, limit: safeLimit };
+  }
+
+  /** Read a single persona by id, enriched with its domain name (404 if absent). */
+  async get(id: string): Promise<PersonaWithDomain> {
+    const row = await this.prisma.contentPersona.findUnique({
+      where: { id },
+      include: { domain: { select: { domainName: true } } },
+    });
+    if (!row) {
+      throw new NotFoundError('Persona not found', 'PERSONA_NOT_FOUND');
+    }
+    const { domain, ...persona } = row as ContentPersona & { domain: { domainName: string } };
+    return { ...(persona as ContentPersona), domainName: domain.domainName };
+  }
 
   /** Create and persist a persona under its (upserted) domain (Req 1.5). */
   async create(input: PersonaInput): Promise<ContentPersona> {

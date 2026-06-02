@@ -77,6 +77,22 @@ export class AutopilotService {
       throw new ValidationError('periodTo must be on or after periodFrom', 'AUTOPILOT_PERIOD_RANGE_INVALID');
     }
 
+    // The generate step requires a domain + at least one persona before any AI
+    // call (MultiFormatGenerator.validate). Without them EVERY item would be
+    // soft-skipped and the run would still COMPLETE with generated=0 — a
+    // misleading "success". Fail fast (400) so the operator fixes the input.
+    const domainName =
+      typeof input.domainName === 'string' ? input.domainName.trim() : '';
+    if (domainName.length === 0) {
+      throw new ValidationError('domainName is required', 'AUTOPILOT_DOMAIN_REQUIRED');
+    }
+    const personaIds = Array.isArray(input.personaIds)
+      ? input.personaIds.filter((id) => typeof id === 'string' && id.trim().length > 0)
+      : [];
+    if (personaIds.length === 0) {
+      throw new ValidationError('At least one personaId is required', 'AUTOPILOT_PERSONA_REQUIRED');
+    }
+
     const requireApproval = input.requireApproval ?? this.deps.requireApproval ?? true;
 
     const initialContext: Record<string, unknown> = {
@@ -89,14 +105,8 @@ export class AutopilotService {
     if (Array.isArray(input.channels) && input.channels.length > 0) {
       initialContext.channels = input.channels.filter((c) => typeof c === 'string' && c.trim().length > 0);
     }
-    if (typeof input.domainName === 'string' && input.domainName.trim().length > 0) {
-      initialContext.domainName = input.domainName.trim();
-    }
-    if (Array.isArray(input.personaIds) && input.personaIds.length > 0) {
-      initialContext.personaIds = input.personaIds.filter(
-        (id) => typeof id === 'string' && id.trim().length > 0,
-      );
-    }
+    initialContext.domainName = domainName;
+    initialContext.personaIds = personaIds;
     if (createdBy && createdBy.trim().length > 0) {
       initialContext.createdBy = createdBy.trim();
     }

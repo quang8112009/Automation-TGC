@@ -18,6 +18,7 @@
     "lint": "eslint \"src/**/*.ts\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
+    "seed:personas": "ts-node prisma/seed-personas.ts",
     "secret-scan": "node scripts/secret-scan.js"
   },
   "dependencies": {

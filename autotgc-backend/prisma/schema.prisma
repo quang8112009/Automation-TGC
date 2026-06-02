@@ -50,6 +50,7 @@ model UserAccount {
   createdAt         DateTime  @default(now())
   sessions          JwtSession[]
   assignedLeads     Lead[]
+  notifications     Notification[] @relation("UserNotifications")
 }
 
 model JwtSession {
@@ -119,6 +120,8 @@ model ContentDraft {
   language                 String   @default("vi")
   planItemId               String?
   seoKeywords              Json     @default("[]")
+  // Approval_Queue manual priority ordering (additive; default keeps deadline-based order)
+  priorityIndex            Int      @default(0)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
   ctas                     DraftCta[]
@@ -213,6 +216,8 @@ model LearningInsight {
   analysisPeriod  String
   rejectionReason String?
   generatedAt     DateTime @default(now())
+  // Approval_Queue manual priority ordering (additive; default keeps deadline-based order)
+  priorityIndex   Int      @default(0)
 }
 
 model AiPromptContext {
@@ -482,6 +487,7 @@ model CandidateProfile {
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
   history           CandidateStageHistory[]
+  documents         DocumentChecklistItem[]
 
   @@index([stage])
   @@index([desiredMarket])
@@ -643,4 +649,125 @@ model BrandTemplate {
 
   @@index([kind])
   @@index([active])
+}
+
+// ===========================================================================
+// AI Reporting & Ops Enhancements (additive) — company WEEKLY/MONTHLY AI
+// reports, candidate document checklists, and a configurable default document
+// catalog per recruitment market. All models/enums below are additive and do
+// not modify existing models/fields.
+// ===========================================================================
+
+enum ReportType {
+  WEEKLY
+  MONTHLY
+}
+
+enum ReportStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  ARCHIVED
+  INSUFFICIENT_DATA
+}
+
+enum DocSubmissionStatus {
+  PENDING
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+enum DocSource {
+  DEFAULT
+  CUSTOM
+}
+
+// AI-generated company report for a WEEKLY/MONTHLY period. Created in DRAFT
+// (review mode) or INSUFFICIENT_DATA when no valid records exist; transitions
+// are guarded by Report_State_Machine.
+model CompanyReport {
+  id          String       @id @default(uuid())
+  reportType  ReportType
+  periodFrom  DateTime
+  periodTo    DateTime
+  periodLabel String // e.g. "2024-W23" | "2024-06"
+  status      ReportStatus @default(DRAFT)
+  content     Json // serialized ReportContent
+  aiGenerated Boolean      @default(false)
+  scopeUserId String? // null = company-wide scope (ADMIN)
+  createdBy   String? // userId | 'background-worker'
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([reportType, periodLabel, scopeUserId])
+  @@index([reportType, periodFrom])
+  @@index([status])
+}
+
+// A single document-checklist item attached to a candidate. Cascade-deleted
+// with its CandidateProfile.
+model DocumentChecklistItem {
+  id          String              @id @default(uuid())
+  candidateId String
+  candidate   CandidateProfile    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  type        String // stable document-type code (e.g. PASSPORT, HEALTH_CHECK)
+  label       String // display label
+  status      DocSubmissionStatus @default(PENDING)
+  required    Boolean             @default(true)
+  source      DocSource           @default(DEFAULT)
+  note        String?
+  submittedAt DateTime? // set when status moves to SUBMITTED
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+// ADMIN-configurable default document set per recruitment market. Editing the
+// catalog does not affect already-created DocumentChecklistItem rows.
+model DocumentTypeCatalog {
+  id        String   @id @default(uuid())
+  market    String   @unique // RecruitmentMarket code: JAPAN|KOREA|GERMANY|TAIWAN|DOMESTIC|OTHER
+  docs      Json     @default("[]") // DocTypeDef[]: { type, label, required }
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+// ===========================================================================
+// Admin Oversight, RBAC & Notifications (additive) — persistent per-recipient
+// notifications and an append-only, multi-entity activity log. Both models are
+// additive and do not modify existing models/fields (including AuditEntry).
+// ===========================================================================
+
+/// Thông báo bền vững gắn một người nhận (Req 1). Additive.
+model Notification {
+  id              String      @id @default(uuid())
+  recipientUserId String // FK -> UserAccount.id (Req 1.2)
+  recipient       UserAccount @relation("UserNotifications", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  kind            String // 'ACTIVITY' | ... (Req 1.1)
+  message         String
+  refType         String? // loại thực thể nguồn (tùy chọn) — Req 1.6
+  refId           String? // id thực thể nguồn (tùy chọn) — Req 1.6
+  read            Boolean     @default(false) // mặc định chưa đọc — Req 1.3
+  createdAt       DateTime    @default(now())
+
+  @@index([recipientUserId, createdAt]) // truy vấn theo người nhận + thời gian (Req 1.4)
+  @@index([read])
+}
+
+/// Nhật ký hoạt động đa thực thể, append-only (Req 2). Additive, độc lập AuditEntry.
+model ActivityLog {
+  id          String   @id @default(uuid())
+  actorUserId String // người thực hiện (Req 2.1, 6.6)
+  action      String // loại hành động / eventType
+  targetType  String // loại thực thể đích
+  targetId    String // định danh thực thể đích
+  detail      Json     @default("{}") // lưu verbatim (Req 2.6)
+  createdAt   DateTime @default(now()) // server đóng dấu (Req 2.4)
+
+  @@index([actorUserId]) // Req 2.3
+  @@index([targetType, targetId]) // Req 2.3
+  @@index([createdAt]) // Req 2.3
 }

@@ -11,7 +11,7 @@ import {
   UNATTRIBUTED,
 } from './validation';
 import type { Attribution, CreateLeadInput } from './validation';
-import { leadTransition } from './statusMachine';
+import { leadTransition, isLeadStatus } from './statusMachine';
 import type { LeadStatus } from './statusMachine';
 import {
   ConflictError,
@@ -20,6 +20,7 @@ import {
   ValidationError,
 } from '../infra/errors';
 import type { EventBus } from '../infra/events';
+import type { OversightService } from '../oversight/oversightService';
 
 export interface LeadListFilter {
   source?: string;
@@ -48,6 +49,7 @@ export class LeadService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly eventBus?: EventBus,
+    private readonly oversight?: OversightService,
   ) {}
 
   /** Publish a lead domain event (best-effort; never blocks the write path). */
@@ -131,7 +133,12 @@ export class LeadService {
     const where: Prisma.LeadWhereInput = {};
     if (filter.source) where.source = filter.source;
     if (filter.platform) where.platform = filter.platform;
-    if (filter.status) where.status = filter.status as LeadStatus;
+    if (filter.status) {
+      if (!isLeadStatus(filter.status)) {
+        throw new ValidationError(`Invalid status: ${String(filter.status)}`, 'INVALID_STATUS');
+      }
+      where.status = filter.status as LeadStatus;
+    }
     if (filter.from || filter.to) {
       where.createdAt = {};
       if (filter.from) (where.createdAt as Prisma.DateTimeFilter).gte = new Date(filter.from);
@@ -184,6 +191,7 @@ export class LeadService {
 
     const data: Prisma.LeadUpdateInput = {};
     let newStatus: LeadStatus = lead.status as LeadStatus;
+    let statusChanged = false;
 
     if (input.status !== undefined && input.status !== lead.status) {
       const transition = leadTransition(lead.status as LeadStatus, input.status as LeadStatus);
@@ -195,6 +203,7 @@ export class LeadService {
       }
       newStatus = transition.status;
       data.status = newStatus;
+      statusChanged = true;
     }
 
     if (input.note !== undefined) data.note = input.note;
@@ -222,6 +231,21 @@ export class LeadService {
     });
 
     await this.emit('updated', updated);
+
+    // Oversight hook: after the status truly changed and the update committed,
+    // a QUALIFIED/CONVERTED transition is a supervised Important_Action — fan it
+    // out to ADMINs via the central emit point. Best-effort (never blocks the
+    // write path). Req 7.3, 7.4, 7.6.
+    if (statusChanged && (newStatus === 'QUALIFIED' || newStatus === 'CONVERTED')) {
+      await this.oversight?.record({
+        actorUserId: actor.userId,
+        action: 'LEAD_STATUS_CHANGED',
+        targetType: 'lead',
+        targetId: id,
+        detail: { previousStatus: lead.status, newStatus },
+      });
+    }
+
     return updated;
   }
 

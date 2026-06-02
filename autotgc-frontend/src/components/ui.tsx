@@ -337,7 +337,7 @@ export function Modal({
             <Icon name="x" size={18} />
           </button>
         </div>
-        {children}
+        <div className="modal-body">{children}</div>
       </div>
     </div>
   );

@@ -247,6 +247,16 @@ export class ContentPlanner {
     const objective = input.objective;
     const from = coerceDate(input.periodFrom, 'PLAN_PERIOD_FROM_INVALID');
     const to = coerceDate(input.periodTo, 'PLAN_PERIOD_TO_INVALID');
+    // Guard the range so item target dates never run backwards (mirrors the
+    // autopilotService.run() AUTOPILOT_PERIOD_RANGE_INVALID guard). spreadDate
+    // would otherwise place item 0 at the later date and later items before
+    // periodFrom when to < from.
+    if (to.getTime() < from.getTime()) {
+      throw new ValidationError(
+        'periodTo must be on or after periodFrom',
+        'PLAN_PERIOD_RANGE_INVALID',
+      );
+    }
 
     let trends = await this.resolveTrends(market);
 
@@ -492,7 +502,15 @@ function matchesAny(trend: PlanTrendInput, needles: string[]): boolean {
   for (const raw of needles) {
     const n = raw.trim().toLowerCase();
     if (n.length === 0) continue;
-    if (topic.includes(n) || keyword.includes(n) || n.includes(keyword) || n.includes(topic)) {
+    // Guard the reverse-substring checks against empty topic/keyword: in JS
+    // `"x".includes("")` is true, so without these guards an empty field would
+    // match every needle (always dropped by avoidTopics / always boosted).
+    if (
+      topic.includes(n) ||
+      keyword.includes(n) ||
+      (keyword.length > 0 && n.includes(keyword)) ||
+      (topic.length > 0 && n.includes(topic))
+    ) {
       return true;
     }
   }

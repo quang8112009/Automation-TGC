@@ -113,9 +113,12 @@ export function Analytics() {
   }, [funnel]);
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Phân tích tuyển dụng</h1>
+        <div>
+          <div className="eyebrow">CRM tuyển dụng</div>
+          <h1 className="page-title">Phân tích tuyển dụng</h1>
+        </div>
         <span className="muted">Phễu ứng viên · chuyển đổi đơn hàng → xuất cảnh</span>
       </div>
 
@@ -141,7 +144,7 @@ export function Analytics() {
               ))}
             </select>
           </div>
-          <button className="btn btn-primary" onClick={applyFilters}>
+          <button className="btn btn--secondary" onClick={applyFilters}>
             Áp dụng
           </button>
           <button className="btn" onClick={resetFilters}>

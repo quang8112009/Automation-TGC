@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { ErrorMessage } from '../components/ui';
+import { Icon } from '../components/Icon';
 
 export function Register() {
   const { register, isAuthenticated } = useAuth();
@@ -32,12 +33,24 @@ export function Register() {
 
   return (
     <div className="auth-wrap">
+      <aside className="auth-crest" aria-hidden="true">
+        <span className="auth-crest__mark">
+          <Icon name="graduation-cap" size={28} />
+        </span>
+        <div className="auth-crest__eyebrow">Thanh Giang · XKLĐ</div>
+        <h2 className="auth-crest__wordmark">AutoTGC</h2>
+        <hr className="auth-crest__rule" />
+        <p className="auth-crest__deck">
+          Nền tảng vận hành marketing &amp; tuyển dụng bằng dữ liệu và AI — nghiên cứu xu
+          hướng, sản xuất nội dung, đo hiệu quả và quản lý ứng viên xuất khẩu lao động.
+        </p>
+      </aside>
       <form className="auth-card" onSubmit={onSubmit}>
-        <h1>Create account</h1>
-        <p className="auth-sub">Registers a new ADMIN user</p>
+        <h1>Tạo tài khoản</h1>
+        <p className="auth-sub">Đăng ký người dùng ADMIN mới</p>
         {error != null && <ErrorMessage error={error} />}
         <div className="field">
-          <label htmlFor="username">Username</label>
+          <label htmlFor="username">Tên đăng nhập</label>
           <input
             id="username"
             value={username}
@@ -58,7 +71,7 @@ export function Register() {
           />
         </div>
         <div className="field">
-          <label htmlFor="password">Password</label>
+          <label htmlFor="password">Mật khẩu</label>
           <input
             id="password"
             type="password"
@@ -69,10 +82,10 @@ export function Register() {
           />
         </div>
         <button className="btn btn-primary" type="submit" disabled={busy} style={{ width: '100%' }}>
-          {busy ? 'Creating…' : 'Create account'}
+          {busy ? 'Đang tạo…' : 'Tạo tài khoản'}
         </button>
         <div className="auth-switch">
-          Already have an account? <Link to="/login">Sign in</Link>
+          Đã có tài khoản? <Link to="/login">Đăng nhập</Link>
         </div>
       </form>
     </div>

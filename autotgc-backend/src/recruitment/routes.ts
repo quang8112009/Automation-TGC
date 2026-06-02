@@ -20,6 +20,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../auth/jwt';
 import type { EventBus } from '../infra/events';
+import type { OversightService } from '../oversight/oversightService';
 import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
 import type { Action } from '../auth/rbac';
 import { ValidationError } from '../infra/errors';
@@ -38,6 +39,9 @@ export interface RecruitmentRouteDeps {
   jwt: JwtService;
   /** Shared domain event bus; when present, candidate stage events publish. */
   eventBus?: EventBus;
+  /** Central oversight emit point; when present, supervised candidate stage
+   * changes fan out one ActivityLog + N notifications. */
+  oversight?: OversightService;
 }
 
 interface IdParams {
@@ -68,7 +72,7 @@ export async function registerRecruitmentRoutes(
   const { prisma, jwt } = deps;
   const auth = requireAuth({ prisma, jwt });
   const jobOrderService = new JobOrderService(prisma);
-  const candidateService = new CandidateService(prisma, deps.eventBus);
+  const candidateService = new CandidateService(prisma, deps.eventBus, deps.oversight);
   const candidateAnalytics = new CandidateAnalyticsService(prisma);
 
   // Collection-level RBAC for the lead_management module.

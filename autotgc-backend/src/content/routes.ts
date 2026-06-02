@@ -85,6 +85,32 @@ export async function registerContentRoutes(app: FastifyInstance, deps: ContentR
   const worker = new PublishingWorker(prisma, registry, tokenManager, alerts, undefined, deps.eventBus);
 
   // ---- Strategy: Persona -----------------------------------------------------
+  // List personas (read). The Strategy page uses this to render all saved
+  // personas, not just ones created in the current browser session.
+  app.get(
+    '/api/strategy/personas',
+    { preHandler: [auth, guard('strategy', 'read')] },
+    async (request, reply) => {
+      const q = (request.query ?? {}) as Record<string, unknown>;
+      const result = await personaService.list(
+        { domainName: asString(q.domainName) },
+        asInt(q.page, 1),
+        asInt(q.limit, 50),
+      );
+      return reply.code(200).send(result);
+    },
+  );
+
+  app.get(
+    '/api/strategy/personas/:id',
+    { preHandler: [auth, guard('strategy', 'read')] },
+    async (request, reply) => {
+      const { id } = request.params as IdParams;
+      const persona = await personaService.get(id);
+      return reply.code(200).send(persona);
+    },
+  );
+
   app.post(
     '/api/strategy/persona',
     { preHandler: [auth, guard('strategy', 'create')] },
@@ -240,6 +266,20 @@ export async function registerContentRoutes(app: FastifyInstance, deps: ContentR
       const body = (request.body ?? {}) as Record<string, unknown>;
       const draft = await reviewService.reject(id, asString(body.reason) ?? '');
       return reply.code(200).send(draft);
+    },
+  );
+
+  // Self-Correction loop (proposal 3.1): instead of discarding a rejected draft,
+  // rewrite it in place using the stored rejection reason (or an override sent
+  // in the body). Returns the regenerated draft (still DRAFT, preview reset).
+  app.post(
+    '/api/generation/drafts/:id/regenerate',
+    { preHandler: [auth, guard('generation', 'create')] },
+    async (request, reply) => {
+      const { id } = request.params as IdParams;
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const result = await generationService.regenerateFromRejection(id, asString(body.reason));
+      return reply.code(200).send(result);
     },
   );
 

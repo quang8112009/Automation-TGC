@@ -15,9 +15,12 @@ const PLATFORMS = ['facebook', 'tiktok', 'website'];
 
 export function Publishing() {
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Publishing</h1>
+        <div>
+          <div className="eyebrow">Nội dung</div>
+          <h1 className="page-title">Publishing</h1>
+        </div>
       </div>
       <div className="grid grid-2">
         <ScheduleCard />
@@ -122,7 +125,7 @@ function RetryCard() {
       </div>
       <div className="modal-actions">
         <button
-          className="btn btn-primary"
+          className="btn btn--secondary"
           disabled={!id || !at || mutation.isPending}
           onClick={() => {
             setDone(false);
@@ -155,7 +158,7 @@ function PublishNowCard() {
       </div>
       <div className="modal-actions">
         <button
-          className="btn btn-primary"
+          className="btn btn--secondary"
           disabled={!id || mutation.isPending}
           onClick={() => {
             setResult(null);

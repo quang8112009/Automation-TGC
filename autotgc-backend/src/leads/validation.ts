@@ -82,6 +82,14 @@ export function resolveWebsiteAttribution(utmSource?: string | null, contentPost
 
 /** Date-range validation shared by list/stats/export (Req 2.7, 7.4, 8.4). */
 export function validateDateRange(from?: string, to?: string): LeadValidationResult {
+  // Reject unparseable date strings up front so an Invalid Date never reaches
+  // Prisma (which would surface as a 500 instead of a clean 400).
+  if (from !== undefined && from !== '' && Number.isNaN(new Date(from).getTime())) {
+    return { ok: false, status: 400, code: 'INVALID_DATE_RANGE', message: 'from date is invalid' };
+  }
+  if (to !== undefined && to !== '' && Number.isNaN(new Date(to).getTime())) {
+    return { ok: false, status: 400, code: 'INVALID_DATE_RANGE', message: 'to date is invalid' };
+  }
   if (from && to && new Date(from).getTime() > new Date(to).getTime()) {
     return { ok: false, status: 400, code: 'INVALID_DATE_RANGE', message: 'date range is invalid' };
   }

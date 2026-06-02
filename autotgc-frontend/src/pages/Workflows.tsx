@@ -28,9 +28,12 @@ export function Workflows() {
   const [runId, setRunId] = useState<string | null>(null);
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Workflows</h1>
+        <div>
+          <div className="eyebrow">Marketing AI</div>
+          <h1 className="page-title">Workflows</h1>
+        </div>
       </div>
 
       <div className="grid grid-2">
@@ -141,7 +144,7 @@ function TrackRunCard({
         />
       </div>
       <div className="modal-actions">
-        <button className="btn btn-primary" disabled={!input} onClick={() => onTrack(input)}>
+        <button className="btn btn--secondary" disabled={!input} onClick={() => onTrack(input)}>
           Track
         </button>
       </div>

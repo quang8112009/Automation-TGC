@@ -87,9 +87,12 @@ export function JobOrders() {
   }
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Đơn hàng tuyển dụng</h1>
+        <div>
+          <div className="eyebrow">CRM tuyển dụng</div>
+          <h1 className="page-title">Đơn hàng tuyển dụng</h1>
+        </div>
         <div className="row-actions">
           {isAdmin && (
             <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>

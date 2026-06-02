@@ -80,9 +80,12 @@ export function ContentPlans() {
   const plans = plansQuery.data?.plans ?? [];
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Kế hoạch nội dung</h1>
+        <div>
+          <div className="eyebrow">Nội dung</div>
+          <h1 className="page-title">Kế hoạch nội dung</h1>
+        </div>
         <div className="row-actions">
           <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
             <Icon name="plus" size={16} />
@@ -414,7 +417,7 @@ function PlanItemRow({
           <PlanItemStatusBadge status={item.status} />
         </td>
         <td>
-          <button className="btn btn-sm btn-primary" onClick={() => setShowGen(true)}>
+          <button className="btn btn-sm btn--secondary" onClick={() => setShowGen(true)}>
             Tạo nội dung
           </button>
         </td>

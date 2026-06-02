@@ -1,0 +1,18 @@
+# Build artifacts
+*.tar.gz
+**/dist/
+**/node_modules/
+*.tsbuildinfo
+
+# Local tool indexes / runtime
+.codegraph/
+.gitnexus/
+*.log
+*.pid
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+.DS_Store

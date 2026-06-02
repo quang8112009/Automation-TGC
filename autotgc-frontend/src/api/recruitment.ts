@@ -183,3 +183,128 @@ export function getCandidateStats(
 export function deleteCandidate(id: string): Promise<{ status: string }> {
   return api.del<{ status: string }>(`/api/v1/candidates/${encodeURIComponent(id)}`);
 }
+
+// ---- Candidate document checklist ------------------------------------------
+//
+// Wrappers for the per-candidate document-checklist endpoints (Requirements
+// 11.2, 13.1, 13.3, 13.4). The completion metric is divide-by-zero safe on the
+// backend and surfaces the string 'INSUFFICIENT_DATA' instead of a ratio when
+// there are no required items.
+
+/** Submission status of a single checklist item (mirrors the backend enum). */
+export type DocSubmissionStatus = 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
+
+/** Origin of a checklist item: seeded from the market catalog, or added ad-hoc. */
+export type DocSource = 'DEFAULT' | 'CUSTOM';
+
+/** A single candidate document-checklist item (mirrors Prisma DocumentChecklistItem). */
+export interface DocumentChecklistItem {
+  id: string;
+  candidateId: string;
+  type: string;
+  label: string;
+  status: DocSubmissionStatus;
+  required: boolean;
+  source: DocSource;
+  note: string | null;
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * GET /api/v1/candidates/:id/documents result: the items plus the completion
+ * metric (a ratio in [0, 1], or 'INSUFFICIENT_DATA' when there are no required
+ * items).
+ */
+export interface DocumentChecklistResult {
+  items: DocumentChecklistItem[];
+  completion: number | 'INSUFFICIENT_DATA';
+}
+
+export function listCandidateDocuments(candidateId: string): Promise<DocumentChecklistResult> {
+  return api.get<DocumentChecklistResult>(
+    `/api/v1/candidates/${encodeURIComponent(candidateId)}/documents`,
+  );
+}
+
+/** Seed the candidate's checklist from the market defaults (idempotent on the server). */
+export function initCandidateDocuments(
+  candidateId: string,
+): Promise<{ items: DocumentChecklistItem[] }> {
+  return api.post<{ items: DocumentChecklistItem[] }>(
+    `/api/v1/candidates/${encodeURIComponent(candidateId)}/documents/init`,
+  );
+}
+
+export interface AddCustomDocumentInput {
+  /** Display label; must be non-blank after trimming (server returns 400 otherwise). */
+  label: string;
+  /** Defaults to true on the server when omitted. */
+  required?: boolean;
+}
+
+/** Add a candidate-specific CUSTOM checklist item. */
+export function addCandidateDocument(
+  candidateId: string,
+  input: AddCustomDocumentInput,
+): Promise<DocumentChecklistItem> {
+  return api.post<DocumentChecklistItem>(
+    `/api/v1/candidates/${encodeURIComponent(candidateId)}/documents`,
+    input,
+  );
+}
+
+/** Update an item's submission status; the server accepts only the four enum values. */
+export function updateDocumentStatus(
+  itemId: string,
+  status: DocSubmissionStatus,
+): Promise<DocumentChecklistItem> {
+  return api.put<DocumentChecklistItem>(
+    `/api/v1/documents/${encodeURIComponent(itemId)}/status`,
+    { status },
+  );
+}
+
+// ---- Document type catalog (ADMIN) -----------------------------------------
+//
+// ADMIN-only wrappers for the per-market default document set
+// (Requirement 12.4). The backend exposes GET/PUT /api/v1/document-catalog/:market.
+// Updating the catalog does NOT change already-initialized candidate checklists.
+
+/** A single default document-type definition for a market (mirrors backend DocTypeDef). */
+export interface DocTypeDef {
+  /** Stable, machine-readable document-type code (e.g. `PASSPORT`). */
+  type: string;
+  /** Human-facing Vietnamese label. */
+  label: string;
+  /** Whether the document is mandatory for the market. */
+  required: boolean;
+}
+
+/** Result of GET/PUT /api/v1/document-catalog/:market. */
+export interface DocumentCatalogResult {
+  market: string;
+  docs: DocTypeDef[];
+}
+
+/** GET /api/v1/document-catalog/:market — read the default doc set for a market. */
+export function getDocumentCatalog(market: string): Promise<DocumentCatalogResult> {
+  return api.get<DocumentCatalogResult>(
+    `/api/v1/document-catalog/${encodeURIComponent(market)}`,
+  );
+}
+
+/**
+ * PUT /api/v1/document-catalog/:market — replace the default doc set for a market.
+ * Does NOT touch existing candidates' checklists.
+ */
+export function updateDocumentCatalog(
+  market: string,
+  docs: DocTypeDef[],
+): Promise<DocumentCatalogResult> {
+  return api.put<DocumentCatalogResult>(
+    `/api/v1/document-catalog/${encodeURIComponent(market)}`,
+    { docs },
+  );
+}

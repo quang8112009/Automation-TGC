@@ -28,9 +28,12 @@ export function PlatformTokens() {
   });
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Platform Tokens</h1>
+        <div>
+          <div className="eyebrow">Hệ thống</div>
+          <h1 className="page-title">Platform Tokens</h1>
+        </div>
         <button
           className="btn btn-sm"
           onClick={() => void queryClient.invalidateQueries({ queryKey: ['platformTokens'] })}

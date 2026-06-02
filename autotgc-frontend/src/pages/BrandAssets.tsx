@@ -37,9 +37,12 @@ export function BrandAssets() {
   const [kindFilter, setKindFilter] = useState<string>('');
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Tài sản thương hiệu</h1>
+        <div>
+          <div className="eyebrow">Nội dung</div>
+          <h1 className="page-title">Tài sản thương hiệu</h1>
+        </div>
       </div>
 
       <div className="grid grid-2">
@@ -313,7 +316,7 @@ function StandaloneAssetPanel() {
         <textarea value={ctas} onChange={(e) => setCtas(e.target.value)} placeholder="Liên hệ Thanh Giang để được tư vấn" />
       </div>
       <button
-        className="btn btn-primary"
+        className="btn btn--secondary"
         disabled={mutation.isPending || title.trim().length === 0}
         onClick={submit}
       >

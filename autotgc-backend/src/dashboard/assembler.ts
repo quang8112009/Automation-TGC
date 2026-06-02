@@ -21,6 +21,8 @@ export interface DraftLike {
   title: string;
   createdAt: string;       // ISO 8601
   deadlineAt?: string | null;
+  /** Manual Approval_Queue priority (lower = more urgent); defaults to 0. (Req 10.3) */
+  priorityIndex?: number;
 }
 
 export interface InsightLike {
@@ -29,6 +31,8 @@ export interface InsightLike {
   title: string;
   createdAt: string;       // ISO 8601
   deadlineAt?: string | null;
+  /** Manual Approval_Queue priority (lower = more urgent); defaults to 0. (Req 10.3) */
+  priorityIndex?: number;
 }
 
 export interface ScheduledPostLike {
@@ -46,6 +50,8 @@ export interface ApprovalQueueItem {
   createdAt: string;
   deadlineAt: string | null;
   title: string;
+  /** Persisted manual priority (lower = more urgent); the primary sort key. (Req 10.3) */
+  priorityIndex: number;
 }
 
 export interface UpcomingPost {
@@ -92,29 +98,54 @@ export interface TokenExpiryWarning {
 
 /**
  * Approval_Queue composition (Req 15.1): exactly the DRAFT drafts ∪
- * PENDING_REVIEW insights, ordered by the priority predicate (Req 15.2).
+ * PENDING_REVIEW insights, ordered by the priority predicate (Req 15.2, 10.3).
+ *
+ * Ordering: persisted manual `priorityIndex` ascending FIRST (drag-and-drop
+ * priority — Req 10.3), then the existing deadline-based criteria as the
+ * tie-breaker (Req 15.2). Items without a `priorityIndex` default to 0, so the
+ * pre-existing deadline ordering is preserved when nothing has been reordered.
  */
 export function buildApprovalQueue(drafts: DraftLike[], insights: InsightLike[]): ApprovalQueueItem[] {
   const items: ApprovalQueueItem[] = [];
   for (const d of drafts) {
     if (d.status === 'DRAFT') {
-      items.push({ kind: 'DRAFT', id: d.id, createdAt: d.createdAt, deadlineAt: d.deadlineAt ?? null, title: d.title });
+      items.push({
+        kind: 'DRAFT',
+        id: d.id,
+        createdAt: d.createdAt,
+        deadlineAt: d.deadlineAt ?? null,
+        title: d.title,
+        priorityIndex: d.priorityIndex ?? 0,
+      });
     }
   }
   for (const ins of insights) {
     if (ins.insightStatus === 'PENDING_REVIEW') {
-      items.push({ kind: 'INSIGHT', id: ins.id, createdAt: ins.createdAt, deadlineAt: ins.deadlineAt ?? null, title: ins.title });
+      items.push({
+        kind: 'INSIGHT',
+        id: ins.id,
+        createdAt: ins.createdAt,
+        deadlineAt: ins.deadlineAt ?? null,
+        title: ins.title,
+        priorityIndex: ins.priorityIndex ?? 0,
+      });
     }
   }
   return [...items].sort(compareApprovalItems);
 }
 
 /**
- * Priority predicate (Req 15.2): items with a deadline are more urgent and sort
- * before deadline-less items, nearest deadline first; deadline-less items sort
- * most-recently-created first. Total + deterministic so the order is verifiable.
+ * Priority predicate (Req 10.3, 15.2): the persisted manual `priorityIndex`
+ * (ascending — lower is more urgent) is the primary key. Within an equal
+ * `priorityIndex`, fall back to the existing deadline criteria: items with a
+ * deadline sort before deadline-less items, nearest deadline first; deadline-less
+ * items sort most-recently-created first. Total + deterministic so the order is
+ * verifiable.
  */
 export function compareApprovalItems(a: ApprovalQueueItem, b: ApprovalQueueItem): number {
+  // Manual drag-and-drop priority wins first (Req 10.3).
+  if (a.priorityIndex !== b.priorityIndex) return a.priorityIndex - b.priorityIndex;
+
   const ad = a.deadlineAt;
   const bd = b.deadlineAt;
   if (ad !== null && bd !== null) {

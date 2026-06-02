@@ -20,15 +20,15 @@ export interface ChartDatum {
   display?: string;
 }
 
-const PALETTE = ['#1E40AF', '#3B82F6', '#60A5FA', '#F59E0B', '#22C55E', '#94A3B8'];
+const PALETTE = ['#0F1E3D', '#334766', '#5B7088', '#8CA0B8', '#B08542', '#A89E8E'];
 
-/** Brand accent used to highlight the "this one matters" series. */
-const ACCENT = '#F59E0B';
+/** Brand accent used to highlight the "this one matters" series (Prestige Gold). */
+const ACCENT = '#B08542';
 
 /** Pick a stable palette color by index. */
 export function seriesColor(index: number): string {
   const safe = ((Math.trunc(index) % PALETTE.length) + PALETTE.length) % PALETTE.length;
-  return PALETTE[safe] ?? '#1E40AF';
+  return PALETTE[safe] ?? '#0F1E3D';
 }
 
 function pct(value: number, max: number): number {
@@ -54,9 +54,9 @@ export function BarChart({ data, unit = '' }: { data: ChartDatum[]; unit?: strin
   return (
     <div className="bar-chart">
       {sorted.map((d, i) => {
-        // Single secondary-blue series; the top (largest) bar gets the amber
-        // accent so the standout category is obvious. Explicit colors win.
-        const fill = d.color ?? (i === 0 ? ACCENT : '#3B82F6');
+        // Single slate series; the top (largest) bar gets the gold accent so
+        // the standout category is obvious. Explicit colors win.
+        const fill = d.color ?? (i === 0 ? ACCENT : '#334766');
         return (
           <div className="bar-row" key={`${d.label}-${d.originalIndex}`}>
             <div className="bar-label" title={d.label}>
@@ -95,8 +95,8 @@ export interface FunnelStage {
 /**
  * Funnel chart: descending bars, each showing the count + % of the total
  * entering the funnel, so drop-off between stages is visible at a glance.
- * Stage fills follow a brand blue gradient (primary → light blue); the stage
- * with the worst step-to-step drop-off is highlighted in amber.
+ * Stage fills follow a navy → light-blue gradient; the stage with the worst
+ * step-to-step drop-off is highlighted in gold.
  */
 export function FunnelChart({ stages }: { stages: FunnelStage[] }) {
   if (stages.length === 0) {
@@ -118,14 +118,14 @@ export function FunnelChart({ stages }: { stages: FunnelStage[] }) {
     }
   }
 
-  // Blue gradient ramp across stages (primary → secondary → light blue).
-  const RAMP = ['#1E40AF', '#2563EB', '#3B82F6', '#60A5FA'];
+  // Navy gradient ramp across stages (navy → slate → light blue-gray).
+  const RAMP = ['#0F1E3D', '#334766', '#5B7088', '#8CA0B8'];
 
   return (
     <div className="funnel">
       {stages.map((s, i) => {
         const isWorst = i === worstIndex;
-        const fill = isWorst ? ACCENT : RAMP[Math.min(i, RAMP.length - 1)] ?? '#3B82F6';
+        const fill = isWorst ? ACCENT : RAMP[Math.min(i, RAMP.length - 1)] ?? '#334766';
         return (
           <div className="funnel-stage" key={`${s.label}-${i}`}>
             <div className="funnel-meta">
@@ -160,7 +160,7 @@ export function FunnelChart({ stages }: { stages: FunnelStage[] }) {
 export function DonutChart({
   percent,
   caption,
-  color = '#1E40AF',
+  color = '#0F1E3D',
   size = 132,
 }: {
   percent: number;
@@ -177,7 +177,7 @@ export function DonutChart({
   return (
     <div className="donut" style={{ width: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${safe.toFixed(0)}%`}>
-        <circle cx={center} cy={center} r={r} fill="none" stroke="#E2E8F0" strokeWidth={stroke} />
+        <circle cx={center} cy={center} r={r} fill="none" stroke="#E3DCD0" strokeWidth={stroke} />
         <circle
           cx={center}
           cy={center}

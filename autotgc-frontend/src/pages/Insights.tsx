@@ -51,9 +51,12 @@ export function Insights() {
   }
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Insights</h1>
+        <div>
+          <div className="eyebrow">Marketing AI</div>
+          <h1 className="page-title">Insights</h1>
+        </div>
         <button
           className="btn btn-sm"
           disabled={analyzeMutation.isPending}

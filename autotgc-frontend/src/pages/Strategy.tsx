@@ -11,18 +11,25 @@
  * recommendations may return 502 when Gemini is not configured — surfaced
  * cleanly.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { DragEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createPersona,
   getAiContext,
   getCalendar,
   getRecommendations,
+  listPersonas,
+  reorderContentPlanItems,
   rescheduleCalendarItem,
+  rescheduleContentPlanItem,
   updatePersona,
 } from '../api/strategy';
 import type { PersonaInput } from '../api/strategy';
+import { getContentPlan, listContentPlans } from '../api/marketing';
+import { ApiError } from '../lib/apiClient';
 import {
+  Empty,
   ErrorMessage,
   Loading,
   Modal,
@@ -31,7 +38,18 @@ import {
   formatDate,
 } from '../components/ui';
 import { Icon } from '../components/Icon';
-import type { ContentPersona } from '../lib/types';
+import {
+  PLAN_ITEM_STATUS_BADGE,
+  channelLabel,
+  contentFormatLabel,
+  planItemStatusLabel,
+} from '../lib/marketing';
+import type {
+  ContentPersona,
+  ContentPlanItem,
+  ContentPlanWithItems,
+  PlanItemStatus,
+} from '../lib/types';
 
 type CalendarView = 'month' | 'week' | 'day';
 
@@ -65,6 +83,11 @@ export function Strategy() {
     queryFn: getAiContext,
   });
 
+  const personasQuery = useQuery({
+    queryKey: ['strategy', 'personas'],
+    queryFn: () => listPersonas(),
+  });
+
   function onPersonaSaved(p: ContentPersona) {
     setSessionPersonas((prev) => {
       const idx = prev.findIndex((x) => x.id === p.id);
@@ -79,12 +102,16 @@ export function Strategy() {
     setEditing(null);
     setReco(null);
     void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+    void queryClient.invalidateQueries({ queryKey: ['strategy', 'personas'] });
   }
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Strategy &amp; Personas</h1>
+        <div>
+          <div className="eyebrow">Marketing AI</div>
+          <h1 className="page-title">Strategy &amp; Personas</h1>
+        </div>
         <button
           className="btn btn-primary btn-sm"
           onClick={() => {
@@ -116,7 +143,7 @@ export function Strategy() {
               />
             </div>
             <button
-              className="btn btn-primary"
+              className="btn btn--secondary"
               disabled={!recoDomain || recommendMutation.isPending}
               onClick={() => recommendMutation.mutate(recoDomain)}
             >
@@ -153,55 +180,77 @@ export function Strategy() {
         </div>
       </div>
 
-      {/* Personas created this session */}
+      {/* Saved personas (from the backend list endpoint, merged with any created
+          this session so a just-created persona shows immediately). */}
       <div className="card">
-        <h2 className="card-title">Personas (this session)</h2>
+        <h2 className="card-title">Personas</h2>
         <p className="muted">
-          The backend has no list endpoint for personas; this shows personas created or
-          edited during the current session.
+          All saved personas across domains. Newly created or edited personas appear here
+          right away.
         </p>
-        {sessionPersonas.length === 0 ? (
-          <div className="muted">No personas created yet in this session.</div>
+        {personasQuery.isLoading ? (
+          <Loading />
+        ) : personasQuery.error ? (
+          <ErrorMessage error={personasQuery.error} />
         ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Age</th>
-                  <th>Tone</th>
-                  <th>Needs</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessionPersonas.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.personaName}</td>
-                    <td>{p.age}</td>
-                    <td>{p.toneOfVoice}</td>
-                    <td>{p.targetNeeds}</td>
-                    <td>
-                      <button
-                        className="btn btn-sm"
-                        onClick={() => {
-                          setEditing(p);
-                          setReco(null);
-                          setShowForm(true);
-                        }}
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          (() => {
+            const saved = personasQuery.data?.items ?? [];
+            // Merge saved + session personas, session entries win on id (freshest
+            // edit), newest first by createdAt.
+            const byId = new Map<string, ContentPersona>();
+            for (const p of saved) byId.set(p.id, p);
+            for (const p of sessionPersonas) byId.set(p.id, p);
+            const personas = [...byId.values()].sort(
+              (a, b) =>
+                new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+            );
+            if (personas.length === 0) {
+              return <div className="muted">No personas yet. Create one to get started.</div>;
+            }
+            return (
+              <div className="table-wrap">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Age</th>
+                      <th>Tone</th>
+                      <th>Needs</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {personas.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.personaName}</td>
+                        <td>{p.age}</td>
+                        <td>{p.toneOfVoice}</td>
+                        <td>{p.targetNeeds}</td>
+                        <td>
+                          <button
+                            className="btn btn-sm"
+                            onClick={() => {
+                              setEditing(p);
+                              setReco(null);
+                              setShowForm(true);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()
         )}
       </div>
 
       <CalendarSection />
+
+      <ScheduleBoardSection />
 
       {showForm && (
         <PersonaFormModal
@@ -457,6 +506,326 @@ function CalendarSection() {
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+// ---- Schedule_Board (kéo–thả) ----------------------------------------------
+
+/** Local YYYY-MM-DD key (calendar day, no timezone shift for display). */
+function dayKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function itemDayKey(item: ContentPlanItem): string | null {
+  if (!item.targetDate) return null;
+  const d = new Date(item.targetDate);
+  return Number.isNaN(d.getTime()) ? null : dayKey(d);
+}
+
+/** Human label for a YYYY-MM-DD day key. */
+function dayLabel(key: string): string {
+  const d = new Date(`${key}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return key;
+  return d.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' });
+}
+
+/** Vietnamese inline message for a drag-and-drop failure (400/409/403/404). */
+function boardErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 409) {
+      return 'Không thể đổi lịch: mục không ở trạng thái cho phép hoặc đã thay đổi (409).';
+    }
+    if (err.status === 400) return `Yêu cầu không hợp lệ (400): ${err.message}`;
+    if (err.status === 403) return 'Bạn không có quyền kéo–thả lịch nội dung (403).';
+    if (err.status === 404) return 'Không tìm thấy mục cần cập nhật (404).';
+    return `${err.code}: ${err.message}`;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Schedule_Board — kéo–thả các `ContentPlanItem` của một kế hoạch: thả sang cột
+ * ngày khác để đổi `targetDate` (PUT /content-plan-items/:id/reschedule), thả
+ * lên một mục khác để sắp lại thứ tự (POST /content-plans/:planId/reorder với
+ * `orderedIds`). Dùng HTML5 Drag and Drop gốc (draggable/onDragStart/onDragOver/
+ * onDrop) — không thêm thư viện DnD. Mọi cập nhật là lạc quan (optimistic) và tự
+ * hoàn tác (rollback) khi backend trả lỗi.
+ */
+function ScheduleBoardSection() {
+  const queryClient = useQueryClient();
+  const [planId, setPlanId] = useState<string>('');
+  const [boardError, setBoardError] = useState<string | null>(null);
+  const [boardMsg, setBoardMsg] = useState<string | null>(null);
+  const draggedId = useRef<string | null>(null);
+
+  const plansQuery = useQuery({
+    queryKey: ['scheduleBoard', 'plans'],
+    queryFn: () => listContentPlans(),
+  });
+
+  const planKey = ['scheduleBoard', 'plan', planId] as const;
+  const planQuery = useQuery({
+    queryKey: planKey,
+    queryFn: () => getContentPlan(planId),
+    enabled: planId.length > 0,
+  });
+
+  function setCacheItems(updater: (items: ContentPlanItem[]) => ContentPlanItem[]) {
+    queryClient.setQueryData<ContentPlanWithItems>(planKey, (old) =>
+      old ? { ...old, items: updater(old.items) } : old,
+    );
+  }
+
+  // Reschedule a single item to a new day (optimistic + rollback). (Req 9.1)
+  const rescheduleMutation = useMutation({
+    mutationFn: (vars: { id: string; targetDate: string }) =>
+      rescheduleContentPlanItem(vars.id, vars.targetDate),
+    onMutate: async (vars) => {
+      setBoardError(null);
+      setBoardMsg(null);
+      await queryClient.cancelQueries({ queryKey: planKey });
+      const previous = queryClient.getQueryData<ContentPlanWithItems>(planKey);
+      setCacheItems((items) =>
+        items.map((it) => (it.id === vars.id ? { ...it, targetDate: vars.targetDate } : it)),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(planKey, ctx.previous);
+      setBoardError(boardErrorMessage(err));
+    },
+    onSuccess: () => setBoardMsg('Đã đổi ngày đăng cho mục nội dung.'),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: planKey }),
+  });
+
+  // Reorder the plan's items (optimistic + rollback). (Req 9.2)
+  const reorderMutation = useMutation({
+    mutationFn: (vars: { orderedIds: string[] }) =>
+      reorderContentPlanItems(planId, vars.orderedIds),
+    onMutate: async (vars) => {
+      setBoardError(null);
+      setBoardMsg(null);
+      await queryClient.cancelQueries({ queryKey: planKey });
+      const previous = queryClient.getQueryData<ContentPlanWithItems>(planKey);
+      const rank = new Map(vars.orderedIds.map((id, i) => [id, i] as const));
+      setCacheItems((items) =>
+        items
+          .map((it) => ({ ...it, orderIndex: rank.get(it.id) ?? it.orderIndex }))
+          .sort((a, b) => a.orderIndex - b.orderIndex),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(planKey, ctx.previous);
+      setBoardError(boardErrorMessage(err));
+    },
+    onSuccess: () => setBoardMsg('Đã lưu thứ tự mới của các mục nội dung.'),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: planKey }),
+  });
+
+  const plan = planQuery.data;
+  const items = plan ? [...plan.items].sort((a, b) => a.orderIndex - b.orderIndex) : [];
+
+  // Build the day columns spanning the plan period, unioned with any day a item
+  // already sits on (capped so an over-wide period can't blow up the layout).
+  const dayKeys: string[] = [];
+  if (plan) {
+    const seen = new Set<string>();
+    const start = new Date(plan.periodFrom);
+    const end = new Date(plan.periodTo);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      const cursor = new Date(start);
+      cursor.setHours(0, 0, 0, 0);
+      while (cursor <= end && dayKeys.length < 92) {
+        const k = dayKey(cursor);
+        if (!seen.has(k)) {
+          seen.add(k);
+          dayKeys.push(k);
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+    for (const it of items) {
+      const k = itemDayKey(it);
+      if (k && !seen.has(k)) {
+        seen.add(k);
+        dayKeys.push(k);
+      }
+    }
+    dayKeys.sort();
+  }
+
+  const unscheduled = items.filter((it) => itemDayKey(it) === null);
+
+  function onItemDragStart(e: DragEvent, id: string) {
+    draggedId.current = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  }
+
+  function onItemDragEnd() {
+    draggedId.current = null;
+  }
+
+  // Drop on a day column (not on an item) → reschedule to that day. (Req 9.1)
+  function onDayDrop(e: DragEvent, key: string) {
+    e.preventDefault();
+    const id = draggedId.current ?? e.dataTransfer.getData('text/plain');
+    draggedId.current = null;
+    if (!id) return;
+    const item = items.find((it) => it.id === id);
+    if (!item) return;
+    if (itemDayKey(item) === key) return; // already on this day
+    const targetDate = new Date(`${key}T00:00:00`).toISOString();
+    rescheduleMutation.mutate({ id, targetDate });
+  }
+
+  // Drop on another item → reorder, placing the dragged item before the target.
+  // (Req 9.2 — bảo toàn tập hợp, chỉ đổi thứ tự.)
+  function onItemDrop(e: DragEvent, targetId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = draggedId.current ?? e.dataTransfer.getData('text/plain');
+    draggedId.current = null;
+    if (!id || id === targetId) return;
+    const ids = items.map((it) => it.id).filter((x) => x !== id);
+    const targetIdx = ids.indexOf(targetId);
+    if (targetIdx === -1) ids.push(id);
+    else ids.splice(targetIdx, 0, id);
+    reorderMutation.mutate({ orderedIds: ids });
+  }
+
+  function allowDrop(e: DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function renderCard(item: ContentPlanItem) {
+    const badge = PLAN_ITEM_STATUS_BADGE[item.status as PlanItemStatus] ?? 'badge-gray';
+    return (
+      <div
+        key={item.id}
+        draggable
+        onDragStart={(e) => onItemDragStart(e, item.id)}
+        onDragEnd={onItemDragEnd}
+        onDragOver={allowDrop}
+        onDrop={(e) => onItemDrop(e, item.id)}
+        className="sb-card"
+        style={{
+          border: '1px solid var(--border, #ddd)',
+          borderRadius: 8,
+          padding: '8px 10px',
+          marginBottom: 8,
+          background: 'var(--surface, #fff)',
+          cursor: 'grab',
+        }}
+        title="Kéo sang ngày khác để đổi lịch, hoặc thả lên một mục khác để sắp thứ tự"
+      >
+        <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 600 }}>
+          {item.topic || item.keyword || '—'}
+        </div>
+        <div className="muted" style={{ fontSize: 'var(--fs-xs)', margin: '2px 0 6px' }}>
+          {channelLabel(item.channel)} · {contentFormatLabel(item.format)}
+        </div>
+        <span className={`badge ${badge}`}>{planItemStatusLabel(item.status)}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <h2 className="card-title">Bảng lịch nội dung (kéo–thả)</h2>
+      <p className="muted">
+        Chọn một kế hoạch nội dung, rồi kéo các mục sang cột ngày khác để đổi ngày đăng, hoặc thả
+        lên một mục khác để sắp lại thứ tự. Thay đổi được lưu ngay; nếu lỗi sẽ tự hoàn tác.
+      </p>
+
+      <div className="toolbar">
+        <div className="field" style={{ minWidth: 280 }}>
+          <label>Kế hoạch nội dung</label>
+          {plansQuery.isLoading ? (
+            <Loading inline label="Đang tải kế hoạch…" />
+          ) : plansQuery.error ? (
+            <ErrorMessage error={plansQuery.error} />
+          ) : (
+            <select value={planId} onChange={(e) => setPlanId(e.target.value)}>
+              <option value="">— Chọn kế hoạch —</option>
+              {(plansQuery.data?.plans ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </div>
+
+      {boardError && <div className="error-box">{boardError}</div>}
+      {boardMsg && !boardError && <SuccessMessage>{boardMsg}</SuccessMessage>}
+
+      {planId === '' ? (
+        <Empty label="Hãy chọn một kế hoạch để xem bảng lịch kéo–thả." icon="calendar-days" />
+      ) : planQuery.isLoading ? (
+        <Loading label="Đang tải mục nội dung…" />
+      ) : planQuery.error ? (
+        <ErrorMessage error={planQuery.error} />
+      ) : plan && items.length === 0 ? (
+        <Empty label="Kế hoạch này chưa có mục nội dung." />
+      ) : plan ? (
+        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
+          {/* Cột "Chưa xếp ngày" cho các mục không có targetDate. */}
+          <div
+            onDragOver={allowDrop}
+            className="sb-col"
+            style={{ minWidth: 200, flex: '0 0 200px' }}
+          >
+            <h3 style={{ fontSize: 'var(--fs-sm)', margin: '0 0 8px' }}>Chưa xếp ngày</h3>
+            <div
+              onDragOver={allowDrop}
+              style={{ minHeight: 60, padding: 4, borderRadius: 8, background: 'var(--surface-sunken, #f6f6f6)' }}
+            >
+              {unscheduled.length === 0 ? (
+                <div className="muted" style={{ fontSize: 'var(--fs-xs)', padding: 4 }}>
+                  Không có mục.
+                </div>
+              ) : (
+                unscheduled.map(renderCard)
+              )}
+            </div>
+          </div>
+
+          {dayKeys.map((key) => {
+            const dayItems = items.filter((it) => itemDayKey(it) === key);
+            return (
+              <div key={key} className="sb-col" style={{ minWidth: 200, flex: '0 0 200px' }}>
+                <h3 style={{ fontSize: 'var(--fs-sm)', margin: '0 0 8px' }}>{dayLabel(key)}</h3>
+                <div
+                  onDragOver={allowDrop}
+                  onDrop={(e) => onDayDrop(e, key)}
+                  style={{
+                    minHeight: 60,
+                    padding: 4,
+                    borderRadius: 8,
+                    background: 'var(--surface-sunken, #f6f6f6)',
+                  }}
+                >
+                  {dayItems.length === 0 ? (
+                    <div className="muted" style={{ fontSize: 'var(--fs-xs)', padding: 4 }}>
+                      Thả vào đây để xếp ngày {dayLabel(key)}.
+                    </div>
+                  ) : (
+                    dayItems.map(renderCard)
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

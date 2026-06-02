@@ -37,12 +37,19 @@ const PlatformTokens = lazy(() =>
   import('./pages/PlatformTokens').then((m) => ({ default: m.PlatformTokens })),
 );
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
+const UserManagement = lazy(() =>
+  import('./pages/UserManagement').then((m) => ({ default: m.UserManagement })),
+);
 const Autopilot = lazy(() => import('./pages/Autopilot').then((m) => ({ default: m.Autopilot })));
 const Trends = lazy(() => import('./pages/Trends').then((m) => ({ default: m.Trends })));
 const ContentPlans = lazy(() => import('./pages/ContentPlans').then((m) => ({ default: m.ContentPlans })));
 const ContentStudio = lazy(() => import('./pages/ContentStudio').then((m) => ({ default: m.ContentStudio })));
 const BrandAssets = lazy(() => import('./pages/BrandAssets').then((m) => ({ default: m.BrandAssets })));
 const Analytics = lazy(() => import('./pages/Analytics').then((m) => ({ default: m.Analytics })));
+const Reports = lazy(() => import('./pages/Reports').then((m) => ({ default: m.Reports })));
+const DocumentCatalog = lazy(() =>
+  import('./pages/DocumentCatalog').then((m) => ({ default: m.DocumentCatalog })),
+);
 
 function ProtectedShell() {
   return (
@@ -77,6 +84,7 @@ export function App() {
           <Route path="/candidates" element={<Candidates />} />
           <Route path="/candidates/:id" element={<CandidateDetail />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/reports" element={<Reports />} />
           <Route
             path="/ai-consultant"
             element={
@@ -178,6 +186,22 @@ export function App() {
             element={
               <RequireAuth roles={['ADMIN']}>
                 <PlatformTokens />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/document-catalog"
+            element={
+              <RequireAuth roles={['ADMIN']}>
+                <DocumentCatalog />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/users"
+            element={
+              <RequireAuth roles={['ADMIN']}>
+                <UserManagement />
               </RequireAuth>
             }
           />

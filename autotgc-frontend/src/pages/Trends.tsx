@@ -76,9 +76,12 @@ export function Trends() {
   }
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Xu hướng thị trường</h1>
+        <div>
+          <div className="eyebrow">Marketing AI</div>
+          <h1 className="page-title">Xu hướng thị trường</h1>
+        </div>
       </div>
 
       <div className="card">
@@ -190,7 +193,7 @@ export function Trends() {
                         {canReview(t.status) ? (
                           <>
                             <button
-                              className="btn btn-sm btn-primary"
+                              className="btn btn-sm btn--secondary"
                               disabled={reviewMutation.isPending}
                               onClick={() => reviewMutation.mutate({ id: t.id, status: 'ADOPTED' })}
                             >

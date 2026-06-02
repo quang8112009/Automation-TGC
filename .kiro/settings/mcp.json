@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "gitnexus": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "gitnexus",
+        "mcp"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "list_repos",
+        "query",
+        "context",
+        "impact",
+        "detect_changes",
+        "cypher"
+      ]
+    }
+  }
+}

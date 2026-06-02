@@ -47,9 +47,12 @@ export function Drafts() {
   }
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Drafts</h1>
+        <div>
+          <div className="eyebrow">Nội dung</div>
+          <h1 className="page-title">Drafts</h1>
+        </div>
         <button className="btn btn-primary btn-sm" onClick={() => setShowGenerate(true)}>
           <Icon name="plus" size={16} />
           Generate Draft

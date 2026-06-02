@@ -122,8 +122,14 @@ export interface JobOrderConversionBucket {
 export class CandidateAnalyticsService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  /** Local date-range guard (from > to => 400). */
+  /** Local date-range guard (unparseable or from > to => 400). */
   private assertRange(from?: string, to?: string): void {
+    if (from !== undefined && from !== '' && Number.isNaN(new Date(from).getTime())) {
+      throw new ValidationError('from date is invalid', 'INVALID_DATE_RANGE');
+    }
+    if (to !== undefined && to !== '' && Number.isNaN(new Date(to).getTime())) {
+      throw new ValidationError('to date is invalid', 'INVALID_DATE_RANGE');
+    }
     if (from && to && new Date(from).getTime() > new Date(to).getTime()) {
       throw new ValidationError('date range is invalid', 'INVALID_DATE_RANGE');
     }

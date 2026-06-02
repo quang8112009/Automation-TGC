@@ -59,9 +59,12 @@ export function Knowledge() {
   }
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Cơ sở tri thức</h1>
+        <div>
+          <div className="eyebrow">Nội dung</div>
+          <h1 className="page-title">Cơ sở tri thức</h1>
+        </div>
         <div className="row-actions">
           <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
             <Icon name="plus" size={16} />

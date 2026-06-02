@@ -8,7 +8,7 @@
  * to localStorage. On narrow viewports (<=768px) the sidebar becomes an
  * off-canvas drawer toggled from the topbar menu button.
  */
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useRealtime } from '../realtime/RealtimeContext';
@@ -40,7 +40,10 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Tổng quan',
-    items: [{ to: '/', label: 'Dashboard', icon: 'layout-dashboard' }],
+    items: [
+      { to: '/', label: 'Dashboard', icon: 'layout-dashboard' },
+      { to: '/reports', label: 'Báo cáo', icon: 'file-text' },
+    ],
   },
   {
     title: 'CRM tuyển dụng',
@@ -57,7 +60,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/strategy', label: 'Strategy & Personas', icon: 'compass', roles: ['ADMIN'] },
       { to: '/trends', label: 'Xu hướng', icon: 'trending-up', roles: ['ADMIN'] },
       { to: '/insights', label: 'Insights', icon: 'lightbulb', roles: ['ADMIN'] },
-      { to: '/ai-consultant', label: 'Tư vấn AI', icon: 'bot', roles: ['ADMIN'] },
+      { to: '/ai-consultant', label: 'Trợ lý Công việc TGC', icon: 'bot', roles: ['ADMIN'] },
       { to: '/autopilot', label: 'Autopilot', icon: 'plane', roles: ['ADMIN'] },
       { to: '/workflows', label: 'Workflows', icon: 'workflow', roles: ['ADMIN'] },
     ],
@@ -76,7 +79,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Hệ thống',
     items: [
+      { to: '/users', label: 'Quản lý tài khoản', icon: 'users', roles: ['ADMIN'] },
       { to: '/platform-tokens', label: 'Platform Tokens', icon: 'key', roles: ['ADMIN'] },
+      { to: '/document-catalog', label: 'Bộ giấy tờ', icon: 'clipboard-list', roles: ['ADMIN'] },
       { to: '/settings', label: 'Settings', icon: 'settings' },
     ],
   },
@@ -150,7 +155,7 @@ export function Layout() {
       <aside className={sidebarClass}>
         <div className="sidebar-brand">
           <span className="brand-mark" aria-hidden="true">
-            <Icon name="sparkles" size={18} />
+            <Icon name="graduation-cap" size={18} />
           </span>
           <span className="brand-wordmark">AutoTGC</span>
         </div>
@@ -229,7 +234,9 @@ export function Layout() {
           </button>
         </header>
         <main className="content">
-          <Outlet />
+          <Suspense fallback={<div className="skeleton-stack" role="status" aria-label="Đang tải trang…"><span className="skeleton" style={{height:16,width:'40%'}} /><span className="skeleton skeleton--row" /><span className="skeleton skeleton--row" /><span className="skeleton skeleton--row" /></div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

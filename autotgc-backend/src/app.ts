@@ -27,6 +27,13 @@ import { registerRealtime } from './realtime';
 import { registerOrchestrationRoutes } from './orchestration/routes';
 import { registerRecruitmentAgentRoutes } from './recruitment/agent/routes';
 import { registerRecruitmentRoutes } from './recruitment/routes';
+import { registerReportingRoutes } from './reporting/routes';
+import { registerDocumentRoutes } from './recruitment/documents/routes';
+import { registerOversightRoutes } from './oversight/routes';
+import { registerUserManagementRoutes } from './auth/userRoutes';
+import { ActivityLogger } from './oversight/activityLogger';
+import { NotificationService } from './oversight/notificationService';
+import { OversightService } from './oversight/oversightService';
 import { registerMarketingPlanningRoutes } from './marketing/planning/routes';
 import { registerMultiFormatRoutes } from './marketing/content/routes';
 import { registerAssetRoutes } from './marketing/assets/routes';
@@ -97,8 +104,20 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   const { registry, tokenManager, alerts, gemini, mediaService, eventBus, mediaRenderProvider } =
     deps.services;
 
+  // Single shared oversight emit point (design §5, Req 10.4): every supervised
+  // Important_Action funnels through ONE OversightService so it appends exactly
+  // one ActivityLog and fans out one Notification per ADMIN + one realtime
+  // event on the SAME `eventBus` the rest of the app publishes on. It is
+  // injected (optionally) into LeadService / CandidateService /
+  // DocumentChecklistService via their route registrars below.
+  const oversight = new OversightService(
+    deps.prisma,
+    new ActivityLogger(deps.prisma),
+    new NotificationService(deps.prisma, eventBus),
+  );
+
   // --- Register routes (foundation/leads/dashboard first) --------------------
-  await registerRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, config, eventBus });
+  await registerRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, config, eventBus, oversight });
   registerPlatformTokenRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, config, tokenManager });
   await registerContentRoutes(app, {
     prisma: deps.prisma,
@@ -149,6 +168,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
     eventBus,
     generationService,
     schedulingService,
+    gemini,
   });
 
   // AI recruitment-consultant agent + knowledge base (/api/v1/ai, /api/v1/knowledge).
@@ -160,7 +180,32 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   });
 
   // Recruitment CRM (labor-export / XKLĐ): job orders + candidate pipeline.
-  await registerRecruitmentRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, eventBus });
+  await registerRecruitmentRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, eventBus, oversight });
+
+  // Company reporting (weekly/monthly): generate / list / get / edit / transition
+  // / export, all behind requireAuth + rbacGuard inside the registrar (Req 5.1–
+  // 5.3, 15.5). `gemini` is threaded through so AI summaries work when a key is
+  // configured; absent it the service falls back to deterministic summaries.
+  registerReportingRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini });
+
+  // Candidate document checklist + document-type catalog (Req 13.6, 15.5). All
+  // routes mount behind requireAuth + rbacGuard inside the registrar; SALES is
+  // assigned-only on candidate-scoped routes and denied on the ADMIN catalog.
+  await registerDocumentRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, oversight });
+
+  // Oversight: persistent notifications + append-only activity feed
+  // (/api/v1/notifications*, /api/v1/activity). All routes mount behind
+  // requireAuth + rbacGuard inside the registrar; the activity feed is
+  // ADMIN-only (dashboard/company_stats) while notification reads are self-
+  // scoped (dashboard/read). The shared eventBus is threaded so notification
+  // creation publishes one realtime `notification` frame.
+  await registerOversightRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, eventBus });
+
+  // Staff account management (ADMIN-only): list / create SALES / lock / unlock /
+  // change role / reset password (/api/v1/users*). All routes mount behind
+  // requireAuth + rbacGuard({ module: 'user_management' }) inside the registrar,
+  // so SALES is denied 403 outright.
+  registerUserManagementRoutes(app, { prisma: deps.prisma, jwt: deps.jwt });
 
   // AI marketing autopilot:
   //  - trend research + per-market content planning (/api/v1/trends, /content-plans)

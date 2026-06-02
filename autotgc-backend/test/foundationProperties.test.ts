@@ -471,7 +471,9 @@ describe('foundation-and-deployment password hashing', () => {
       ),
       { numRuns: 20 },
     );
-  });
+    // argon2id is CPU/memory-hard; under the full suite's parallel workers the
+    // default 5s timeout can be exceeded purely from contention. Give it room.
+  }, 30_000);
 });
 
 // ===========================================================================

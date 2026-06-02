@@ -30,9 +30,12 @@ export function AiConsultant() {
   }
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Tư vấn AI</h1>
+        <div>
+          <div className="eyebrow">Marketing AI</div>
+          <h1 className="page-title">Trợ lý Công việc TGC</h1>
+        </div>
       </div>
 
       <div className="card">

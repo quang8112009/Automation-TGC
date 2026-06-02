@@ -74,9 +74,12 @@ export function ContentStudio() {
   }
 
   return (
-    <div>
+    <div className="reveal">
       <div className="page-header">
-        <h1 className="page-title">Xưởng nội dung</h1>
+        <div>
+          <div className="eyebrow">Nội dung</div>
+          <h1 className="page-title">Xưởng nội dung</h1>
+        </div>
       </div>
 
       <div className="card">
@@ -236,7 +239,7 @@ function DraftResult({ result }: { result: MultiFormatResult }) {
           </select>
         </div>
         <button
-          className="btn btn-primary"
+          className="btn btn--secondary"
           disabled={assetMutation.isPending}
           onClick={() => assetMutation.mutate()}
         >

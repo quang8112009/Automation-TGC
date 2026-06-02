@@ -1,113 +1,152 @@
 /* =====================================================================
-   AutoTGC — Thanh Giang | Data-Dense Dashboard
-   Single global stylesheet. Driven entirely by the :root tokens below
-   (palette/spacing/shadow/typography per design-system MASTER + STYLE_BRIEF).
-   Class NAMES the 22 pages depend on are preserved (restyled, never renamed).
-   New additive classes use the BEM-ish `block__el` / `block--mod` convention.
+   AutoTGC — Thanh Giang | "Academia" Redesign (v2)
+   Prestige-university editorial aesthetic. Single global stylesheet driven
+   entirely by the :root tokens below (Academic Navy / Oxford Crimson /
+   Prestige Gold on warm ivory paper; Crimson Pro display + Inter body +
+   IBM Plex Mono numerals). Per design-system MASTER + STYLE_BRIEF.
+   Class NAMES the ~22 pages depend on are PRESERVED (restyled, never renamed).
    ===================================================================== */
 
 :root {
-  /* ---- Brand (MASTER — DO NOT CHANGE) ---- */
-  --color-primary:        #1E40AF;  /* blue-800 — brand spine, links */
-  --color-primary-hover:  #1B3A9C;
-  --color-secondary:      #3B82F6;  /* blue-500 — info, chart series, focus */
-  --color-cta:            #F59E0B;  /* amber-500 — THE primary action color */
-  --color-cta-hover:      #D97706;  /* amber-600 */
-  --color-background:     #F8FAFC;  /* app canvas */
-  --color-text:           #1E3A8A;  /* blue-900 — brand/heading text */
+  /* ============================================================ BRAND
+     (MASTER — Academia. DO NOT change these hexes.) */
+  --color-primary:        #0F1E3D;  /* Academic Navy — sidebar spine, headings, structure */
+  --color-primary-700:    #16294F;  /* darker/hover navy */
+  --color-primary-hover:  #16294F;  /* legacy alias → navy hover */
+  --color-secondary:      #334766;  /* Slate Blue — secondary text, chart series */
+  --color-accent:         #8C1D27;  /* Oxford Crimson — THE single CTA / brand accent */
+  --color-accent-hover:   #6E141C;  /* crimson hover */
+  --color-gold:           #B08542;  /* Prestige Gold — hairline flourish, active marker, KPI emphasis */
+  --color-gold-text:      #87651F;  /* darker gold for TEXT roles (≥4.5:1 on white/ivory) */
+  --color-gold-soft:      #EBDFC6;  /* gold tint for rare soft fills */
+  --color-background:     #F7F4EF;  /* warm ivory paper — app canvas */
+  --color-text:           #1A1A1A;  /* ink on paper */
 
-  /* ---- Neutral ramp (Slate) ---- */
-  --gray-50:  #F8FAFC;
-  --gray-100: #F1F5F9;
-  --gray-200: #E2E8F0;
-  --gray-300: #CBD5E1;
-  --gray-400: #94A3B8;
-  --gray-500: #64748B;
-  --gray-600: #475569;
-  --gray-700: #334155;
-  --gray-800: #1E293B;
-  --gray-900: #0F172A;
+  /* ---- Legacy CTA aliases → now crimson (pages reference --color-cta) ---- */
+  --color-cta:            var(--color-accent);
+  --color-cta-hover:      var(--color-accent-hover);
 
-  /* ---- Surfaces & borders ---- */
+  /* ============================================ NEUTRAL RAMP (warm stone) */
+  --stone-50:  #F7F4EF;
+  --stone-100: #EFEAE1;
+  --stone-200: #E3DCD0;
+  --stone-300: #CDC3B4;
+  --stone-400: #A89E8E;
+  --stone-500: #82786A;
+  --stone-600: #5E564B;
+  --stone-700: #433D35;
+  --stone-800: #2A2620;
+  --stone-900: #181613;
+
+  /* ---- Legacy gray-* aliases → mapped onto the warm stone ramp ---- */
+  --gray-50:  var(--stone-50);
+  --gray-100: var(--stone-100);
+  --gray-200: var(--stone-200);
+  --gray-300: var(--stone-300);
+  --gray-400: var(--stone-400);
+  --gray-500: var(--stone-500);
+  --gray-600: var(--stone-600);
+  --gray-700: var(--stone-700);
+  --gray-800: var(--stone-800);
+  --gray-900: var(--stone-900);
+
+  /* ================================================ SURFACES & BORDERS */
   --surface:          #FFFFFF;
   --surface-raised:   #FFFFFF;
-  --surface-sunken:   #F8FAFC;
-  --surface-hover:    #F1F5F9;
-  --surface-active:   #EFF4FF;
-  --border:           #E2E8F0;
-  --border-strong:    #CBD5E1;
-  --sidebar-bg:       #0F172A;
-  --sidebar-fg:       #CBD5E1;
-  --sidebar-fg-muted: #64748B;
-  --sidebar-active-bg:#1E40AF;
-  --sidebar-active-fg:#FFFFFF;
+  --surface-sunken:   #FBF9F5;
+  --surface-hover:    #F4F0E9;
+  --surface-active:   #F0EFF4;
+  --border:           var(--stone-200);
+  --border-strong:    var(--stone-300);
 
-  /* ---- Text roles ---- */
-  --text-strong: #0F172A;
-  --text-body:   #334155;
-  --text-muted:  #64748B;
-  --text-faint:  #94A3B8;
-  --text-on-dark:#F8FAFC;
+  /* ---- Sidebar (Academic Navy spine) ---- */
+  --sidebar-bg:        #0F1E3D;
+  --sidebar-bg-raised: #16294F;
+  --sidebar-fg:        #C9D2E2;
+  --sidebar-fg-muted:  #7F8CA6;
+  --sidebar-active-bg: #16294F;
+  --sidebar-active-fg: #FFFFFF;
+  --sidebar-accent:    var(--color-accent);
+  --sidebar-brand-gold:var(--color-gold);
 
-  /* ---- Status (base / soft-bg / on-soft) ---- */
-  --success: #22C55E;  --success-bg: #DCFCE7;  --success-fg: #15803D;
-  --warning: #F59E0B;  --warning-bg: #FEF3C7;  --warning-fg: #B45309;
-  --danger:  #EF4444;  --danger-bg:  #FEE2E2;  --danger-fg:  #B91C1C;
-  --info:    #3B82F6;  --info-bg:    #DBEAFE;  --info-fg:    #1D4ED8;
-  --neutral: #94A3B8;  --neutral-bg: #F1F5F9;  --neutral-fg: #475569;
+  /* ====================================================== TEXT ROLES */
+  --text-strong: #1A1A1A;
+  --text-body:   #2A2620;
+  --text-muted:  #5E564B;
+  --text-faint:  #82786A;
+  --text-on-dark:#F7F4EF;
+  --text-link:   var(--color-accent);
+  --text-link-hover: var(--color-accent-hover);
 
-  /* ---- Spacing (MASTER) ---- */
+  /* ============================== STATUS (base / soft-bg / on-soft fg) */
+  --success: #2E7D5B;  --success-bg: #E2F0E8;  --success-fg: #1F5C42;
+  --warning: #B08542;  --warning-bg: #F3E9D6;  --warning-fg: #7A5A21;
+  --danger:  #B3261E;  --danger-bg:  #F6E1DF;  --danger-fg:  #8C1D27;
+  --info:    #334766;  --info-bg:    #E6EAF0;  --info-fg:    #243349;
+  --neutral: #A89E8E;  --neutral-bg: #EFEAE1;  --neutral-fg: #433D35;
+
+  /* =========================================================== SPACING */
   --space-xs: 4px;  --space-sm: 8px;  --space-md: 16px;
   --space-lg: 24px; --space-xl: 32px; --space-2xl: 48px; --space-3xl: 64px;
 
-  /* ---- Radius ---- */
-  --radius-sm:   6px;
-  --radius-md:   8px;
-  --radius-lg:   12px;
-  --radius-xl:   16px;
+  /* ============================================= RADIUS (editorial) */
+  --radius-sm:   3px;
+  --radius-md:   6px;
+  --radius-lg:   8px;
+  --radius-xl:   12px;
   --radius-pill: 9999px;
 
-  /* ---- Shadows (MASTER) ---- */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.10);
-  --shadow-lg: 0 10px 15px rgba(0,0,0,0.10);
-  --shadow-xl: 0 20px 25px rgba(0,0,0,0.15);
-  --shadow-focus: 0 0 0 3px rgba(30,64,175,0.20);
+  /* ====================================== SHADOWS (soft, paper-like) */
+  --shadow-sm: 0 1px 2px rgba(26,26,26,0.04);
+  --shadow-md: 0 4px 12px rgba(15,30,61,0.06);
+  --shadow-lg: 0 12px 28px rgba(15,30,61,0.10);
+  --shadow-xl: 0 24px 48px rgba(15,30,61,0.14);
+  --shadow-focus: 0 0 0 3px rgba(15,30,61,0.15);
+  --shadow-focus-crimson: 0 0 0 3px rgba(140,29,39,0.22);
 
-  /* ---- Typography ---- */
-  --font-heading: 'Fira Code', ui-monospace, 'SFMono-Regular', monospace;
-  --font-body:    'Fira Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono:    'Fira Code', ui-monospace, monospace;
+  /* ======================================================= TYPOGRAPHY */
+  --font-display: 'Crimson Pro', Georgia, 'Times New Roman', serif;
+  --font-heading: var(--font-display);
+  --font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
 
-  --fs-display: 28px;  --lh-display: 36px;
-  --fs-h1:      22px;  --lh-h1:      30px;
-  --fs-h2:      18px;  --lh-h2:      26px;
-  --fs-h3:      15px;  --lh-h3:      22px;
-  --fs-body:    14px;  --lh-body:    21px;
-  --fs-sm:      13px;  --lh-sm:      18px;
-  --fs-xs:      12px;  --lh-xs:      16px;
-  --fs-kpi:     30px;  --lh-kpi:     36px;
+  --fs-display: 40px;  --lh-display: 44px;
+  --fs-h1:      34px;  --lh-h1:      39px;
+  --fs-h2:      24px;  --lh-h2:      30px;
+  --fs-h3:      18px;  --lh-h3:      24px;
+  --fs-body:    15px;  --lh-body:    24px;
+  --fs-sm:      13px;  --lh-sm:      20px;
+  --fs-xs:      12px;  --lh-xs:      17px;
+  --fs-kpi:     40px;  --lh-kpi:     40px;
+
+  --tracking-label: 0.08em;
+  --tracking-tight: -0.01em;
 
   --fw-light: 300; --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
 
-  /* ---- Motion ---- */
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --dur-fast: 150ms; --dur-base: 200ms; --dur-slow: 300ms;
+  /* ============================================================ MOTION */
+  --ease:          cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-editorial:cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast:   150ms;
+  --dur-base:   200ms;
+  --dur-slow:   300ms;
+  --dur-reveal: 480ms;
+  --dur-reveal-lg: 600ms;
 
-  /* ---- Layout ---- */
+  /* ============================================================ LAYOUT */
   --sidebar-w:           256px;
   --sidebar-w-collapsed: 64px;
-  --topbar-h:            56px;
-  --content-max:         1440px;
-  --content-pad:         24px;
+  --topbar-h:            64px;
+  --content-max:         1320px;
+  --content-max-wide:    1440px;
+  --content-pad:         32px;
 
-  /* ---- Back-compat aliases (legacy token names used by pages/inline styles) --- */
+  /* ============================================ BACK-COMPAT ALIASES */
   --bg: var(--color-background);
   --text: var(--text-strong);
   --primary: var(--color-primary);
-  --primary-hover: var(--color-primary-hover);
   --sidebar-text: var(--sidebar-fg);
-  --sidebar-active: var(--color-secondary);
+  --sidebar-active: var(--sidebar-active-bg);
   --radius: var(--radius-md);
   --shadow: var(--shadow-sm);
 
@@ -141,20 +180,23 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
+  font-family: var(--font-display);
   color: var(--text-strong);
   font-weight: var(--fw-semibold);
-  line-height: 1.25;
+  line-height: 1.2;
+  letter-spacing: var(--tracking-tight);
 }
 
 a {
-  color: var(--color-primary);
+  color: var(--text-link);
   text-decoration: none;
   transition: color var(--dur-fast) var(--ease);
 }
 
 a:hover {
+  color: var(--text-link-hover);
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 button {
@@ -162,14 +204,12 @@ button {
   cursor: pointer;
 }
 
-/* Visible keyboard focus for every focusable element (a11y). */
 :focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
   border-radius: var(--radius-sm);
 }
 
-/* Mono numerals + code helper. */
 .mono,
 code,
 .kpi-num {
@@ -180,11 +220,12 @@ code,
 /* ------------------------------------------------------------- Inputs */
 input,
 select,
-textarea {
+textarea,
+.input {
   font: inherit;
   height: 38px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
+  padding: 9px 13px;
+  border: 1px solid var(--stone-300);
   border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text-strong);
@@ -206,7 +247,8 @@ textarea::placeholder {
 
 input:focus,
 select:focus,
-textarea:focus {
+textarea:focus,
+.input:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: var(--shadow-focus);
@@ -214,7 +256,8 @@ textarea:focus {
 
 input:disabled,
 select:disabled,
-textarea:disabled {
+textarea:disabled,
+.input:disabled {
   background: var(--surface-sunken);
   color: var(--text-faint);
   cursor: not-allowed;
@@ -232,19 +275,15 @@ label {
   margin-bottom: 14px;
 }
 
-/* ============================================================== Buttons
-   .btn-primary = the single amber CTA (used by every page for create/apply/
-   submit/approve). .btn-danger = destructive red. .btn (base) = neutral.
-   New modifiers (.btn--secondary/.btn--ghost/.btn--sm/.btn--lg/.btn--icon)
-   are additive; legacy `.btn-secondary`/`.btn-sm` kept as aliases.        */
+/* ============================================================== Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
-  padding: 10px 16px;
+  padding: 10px 18px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border);
+  border: 1px solid var(--stone-300);
   background: var(--surface);
   color: var(--text-body);
   font-family: var(--font-body);
@@ -261,7 +300,7 @@ label {
 
 .btn:hover {
   background: var(--surface-hover);
-  border-color: var(--border-strong);
+  border-color: var(--stone-400);
 }
 
 .btn:disabled {
@@ -271,46 +310,48 @@ label {
 
 .btn:disabled:hover {
   background: var(--surface);
-  border-color: var(--border);
+  border-color: var(--stone-300);
 }
 
-/* Primary = amber CTA (MASTER: CTA/accent is THE primary action color).
-   Text is near-black (not white): white-on-amber is only ~2.2:1 and fails
-   WCAG AA, whereas gray-900-on-amber is ~7.4:1. Matches the sidebar brand mark
-   which already pairs dark text with the amber accent. */
+/* Primary = Oxford Crimson CTA (white text ≈ 8.9:1, AAA). */
 .btn-primary,
 .btn--primary {
-  background: var(--color-cta);
-  border-color: var(--color-cta);
-  color: var(--gray-900);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #FFFFFF;
   font-weight: var(--fw-semibold);
 }
 
 .btn-primary:hover,
 .btn--primary:hover {
-  background: var(--color-cta-hover);
-  border-color: var(--color-cta-hover);
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
   box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:focus-visible,
+.btn--primary:focus-visible {
+  box-shadow: var(--shadow-focus-crimson);
 }
 
 .btn-primary:disabled:hover,
 .btn--primary:disabled:hover {
-  background: var(--color-cta);
-  border-color: var(--color-cta);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
-/* Secondary = blue outline. */
+/* Secondary = navy outline. */
 .btn-secondary,
 .btn--secondary {
   background: transparent;
-  border: 1.5px solid var(--color-primary);
+  border: 1px solid var(--color-primary);
   color: var(--color-primary);
   font-weight: var(--fw-semibold);
 }
 
 .btn-secondary:hover,
 .btn--secondary:hover {
-  background: var(--surface-active);
+  background: rgba(15, 30, 61, 0.06);
   border-color: var(--color-primary);
 }
 
@@ -326,7 +367,7 @@ label {
   border-color: transparent;
 }
 
-/* Blue solid — secondary emphasis where a filled blue reads better. */
+/* Blue → navy solid (never a second CTA). */
 .btn-blue,
 .btn--blue {
   background: var(--color-primary);
@@ -337,24 +378,23 @@ label {
 
 .btn-blue:hover,
 .btn--blue:hover {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
+  background: var(--color-primary-700);
+  border-color: var(--color-primary-700);
 }
 
-/* Danger = destructive. Uses the darker red (#B91C1C) so white text clears
-   WCAG AA (~6.8:1); the base #EF4444 only reaches ~3.8:1 with white. */
+/* Danger = destructive (crimson-family danger, white text). */
 .btn-danger,
 .btn--danger {
-  background: var(--danger-fg);
-  border-color: var(--danger-fg);
+  background: var(--danger);
+  border-color: var(--danger);
   color: #FFFFFF;
   font-weight: var(--fw-semibold);
 }
 
 .btn-danger:hover,
 .btn--danger:hover {
-  background: #991B1B;
-  border-color: #991B1B;
+  background: #8C1D27;
+  border-color: #8C1D27;
 }
 
 .btn-sm,
@@ -365,7 +405,7 @@ label {
 }
 
 .btn--lg {
-  padding: 12px 20px;
+  padding: 12px 22px;
   font-size: var(--fs-body);
 }
 
@@ -405,12 +445,12 @@ label {
   gap: var(--space-sm);
   height: var(--topbar-h);
   padding: 0 18px;
-  font-family: var(--font-heading);
-  font-size: var(--fs-h2);
+  font-family: var(--font-display);
+  font-size: 20px;
   font-weight: var(--fw-bold);
   color: #FFFFFF;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -422,8 +462,8 @@ label {
   width: 28px;
   height: 28px;
   border-radius: var(--radius-md);
-  background: var(--color-cta);
-  color: var(--gray-900);
+  background: rgba(176, 133, 66, 0.14);
+  color: var(--color-gold);
   flex-shrink: 0;
 }
 
@@ -446,7 +486,6 @@ label {
   flex: 1;
 }
 
-/* Section grouping. */
 .sidebar__group {
   display: flex;
   flex-direction: column;
@@ -459,15 +498,15 @@ label {
 
 .sidebar__label {
   padding: var(--space-sm) 10px var(--space-xs);
+  font-family: var(--font-body);
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--sidebar-fg-muted);
   white-space: nowrap;
 }
 
-/* Collapsed: hide labels, show a hairline divider between groups instead. */
 .sidebar--collapsed .sidebar__label {
   height: 1px;
   padding: 0;
@@ -502,7 +541,7 @@ label {
 }
 
 .sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--sidebar-bg-raised);
   color: #FFFFFF;
   text-decoration: none;
 }
@@ -511,14 +550,13 @@ label {
 .sidebar__item--active {
   background: var(--sidebar-active-bg);
   color: var(--sidebar-active-fg);
-  border-left-color: var(--color-cta);
+  border-left-color: var(--sidebar-accent);
 }
 
 .sidebar-link.active:hover {
   background: var(--sidebar-active-bg);
 }
 
-/* Collapsed rail: icon-only, centered. */
 .sidebar--collapsed .sidebar-link {
   justify-content: center;
   padding: 9px 0;
@@ -527,18 +565,17 @@ label {
 }
 
 .sidebar--collapsed .sidebar-link.active {
-  box-shadow: inset 3px 0 0 var(--color-cta);
+  box-shadow: inset 3px 0 0 var(--sidebar-accent);
 }
 
 .sidebar--collapsed .nav-label {
   display: none;
 }
 
-/* Pinned footer (collapse toggle + connection + user). */
 .sidebar__footer {
   margin-top: auto;
   padding: var(--space-sm);
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
@@ -561,7 +598,7 @@ label {
 }
 
 .sidebar__toggle:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--sidebar-bg-raised);
   color: #FFFFFF;
 }
 
@@ -599,7 +636,6 @@ label {
   flex: 1;
 }
 
-/* Styled (non-functional) global search in the topbar. */
 .topbar__search {
   position: relative;
   flex: 1;
@@ -658,7 +694,6 @@ label {
   margin-right: auto;
 }
 
-/* Mobile scrim for the off-canvas sidebar. */
 .sidebar-scrim {
   display: none;
 }
@@ -683,7 +718,7 @@ label {
 
 .conn-open .conn-dot {
   background: var(--success);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+  box-shadow: 0 0 0 3px rgba(46, 125, 91, 0.18);
 }
 
 .conn-connecting .conn-dot {
@@ -694,7 +729,6 @@ label {
   background: var(--danger);
 }
 
-/* Sidebar-footer variant of the connection pill (on dark). */
 .sidebar__footer .conn {
   padding: 6px 10px;
   color: var(--sidebar-fg);
@@ -831,14 +865,13 @@ label {
 /* ============================================================== Cards */
 .card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--stone-200);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: var(--space-lg);
+  padding: 26px;
   margin-bottom: var(--space-lg);
 }
 
-/* Interactive cards opt in to a hover lift (shadow + border, no transform). */
 .card--interactive {
   cursor: pointer;
   transition: box-shadow var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease);
@@ -846,15 +879,17 @@ label {
 
 .card--interactive:hover {
   box-shadow: var(--shadow-md);
-  border-color: var(--border-strong);
+  border-color: var(--stone-300);
 }
 
 .card-title {
-  font-family: var(--font-body);
-  font-size: var(--fs-h2);
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
   font-weight: var(--fw-semibold);
   color: var(--text-strong);
   margin: 0 0 var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--stone-200);
 }
 
 .grid {
@@ -871,42 +906,124 @@ label {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+/* ---- Bento (dashboard only) ---- */
+.bento {
+  display: grid;
+  gap: var(--space-lg);
+  grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: minmax(120px, auto);
+}
+
+.bento > .card {
+  margin-bottom: 0;
+}
+
+.bento__feature {
+  grid-column: span 8;
+  grid-row: span 2;
+}
+
+.bento__side {
+  grid-column: span 4;
+}
+
+.bento__half {
+  grid-column: span 6;
+}
+
+@media (max-width: 1024px) {
+  .bento {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  .bento__feature,
+  .bento__side,
+  .bento__half {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ============================================================ Page header */
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-md);
   flex-wrap: wrap;
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-xl);
   padding-bottom: var(--space-md);
   border-bottom: 1px solid var(--border);
 }
 
 .page-title {
-  font-family: var(--font-heading);
+  font-family: var(--font-display);
   font-size: var(--fs-h1);
   line-height: var(--lh-h1);
-  font-weight: var(--fw-bold);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
   color: var(--text-strong);
   margin: 0;
+  position: relative;
+  padding-bottom: 12px;
+}
+
+/* Signature: Prestige Gold institutional underline. */
+.page-title::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 48px;
+  height: 2px;
+  background: var(--color-gold);
 }
 
 .section {
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-xl);
 }
 
 .divider {
   height: 1px;
-  background: var(--border);
+  background: var(--stone-200);
   border: none;
-  margin: var(--space-md) 0;
+  margin: var(--space-lg) 0;
+}
+
+/* Editorial kicker (additive helper). Uses the darker gold-text role for AA. */
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--color-gold-text);
+  margin-bottom: var(--space-xs);
+}
+
+/* Drop-cap for hero/editorial intros (additive). */
+.dropcap::first-letter {
+  float: left;
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  font-size: 3.2em;
+  line-height: 0.8;
+  padding: 4px 10px 0 0;
+  color: var(--color-primary);
+}
+
+/* Quiet reveal-on-mount (additive). */
+@keyframes reveal-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.reveal {
+  animation: reveal-rise var(--dur-reveal) var(--ease-editorial) both;
 }
 
 /* ============================================================ Stat tiles */
 .stat {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--stone-200);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
   box-shadow: var(--shadow-sm);
@@ -915,27 +1032,32 @@ label {
   gap: var(--space-xs);
 }
 
+.stat--featured {
+  border-top: 2px solid var(--color-gold);
+}
+
 .stat-label,
 .stat__label {
+  font-family: var(--font-body);
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-label);
 }
 
 .stat-value,
 .stat__value {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums lining-nums;
   font-size: var(--fs-kpi);
   line-height: var(--lh-kpi);
   font-weight: var(--fw-semibold);
   color: var(--text-strong);
   margin-top: var(--space-xs);
+  letter-spacing: 0;
 }
 
-/* Trend delta row: green-up / red-down / gray-flat (invertible). */
 .stat__delta {
   display: inline-flex;
   align-items: center;
@@ -957,7 +1079,6 @@ label {
 .stat__delta--up { color: var(--success-fg); }
 .stat__delta--down { color: var(--danger-fg); }
 .stat__delta--flat { color: var(--text-muted); }
-/* Inverted semantics for cost/leak metrics (down = good). */
 .stat__delta--invert.stat__delta--up { color: var(--danger-fg); }
 .stat__delta--invert.stat__delta--down { color: var(--success-fg); }
 
@@ -970,19 +1091,21 @@ label {
 .table-wrap {
   overflow-x: auto;
   border-radius: var(--radius-md);
+  border: 1px solid var(--stone-200);
 }
 
 table.data {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--fs-sm);
+  font-family: var(--font-body);
 }
 
 table.data th,
 table.data td {
   text-align: left;
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--stone-200);
   white-space: nowrap;
   color: var(--text-body);
 }
@@ -993,10 +1116,10 @@ table.data th {
   z-index: 1;
   font-weight: var(--fw-semibold);
   font-size: var(--fs-xs);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--text-muted);
-  background: var(--gray-50);
+  background: var(--stone-50);
   border-bottom: 1px solid var(--border-strong);
 }
 
@@ -1010,10 +1133,9 @@ table.data tbody tr:hover {
 
 table.data tbody tr.is-selected {
   background: var(--surface-active);
-  box-shadow: inset 3px 0 0 var(--color-cta);
+  box-shadow: inset 3px 0 0 var(--color-accent);
 }
 
-/* Dense + zebra variants (use one, not both). */
 .data--dense th,
 .data--dense td {
   padding: 8px 12px;
@@ -1027,7 +1149,6 @@ table.data tbody tr.is-selected {
   background: var(--surface-hover);
 }
 
-/* Right-aligned mono numerals helper for numeric/ID columns. */
 .data__num,
 table.data td.data__num,
 table.data th.data__num {
@@ -1137,7 +1258,6 @@ table.data th.data__num {
   font-size: var(--fs-sm);
 }
 
-/* Empty state with a centered icon + next action. */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -1149,10 +1269,12 @@ table.data th.data__num {
 }
 
 .empty-state .icon {
-  color: var(--text-faint);
+  color: var(--stone-400);
 }
 
 .empty-state__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
   font-weight: var(--fw-semibold);
   color: var(--text-body);
 }
@@ -1160,13 +1282,13 @@ table.data th.data__num {
 /* ============================================== Skeleton + spinner */
 .skeleton {
   display: block;
-  background: var(--gray-200);
+  background: var(--stone-200);
   border-radius: var(--radius-sm);
   background-image: linear-gradient(
     90deg,
-    var(--gray-200) 0%,
-    var(--gray-100) 50%,
-    var(--gray-200) 100%
+    var(--stone-200) 0%,
+    var(--stone-100) 50%,
+    var(--stone-200) 100%
   );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.2s ease-in-out infinite;
@@ -1211,26 +1333,114 @@ table.data th.data__num {
 /* ============================================================ Auth pages */
 .auth-wrap {
   min-height: 100vh;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  background: var(--color-background);
+}
+
+.auth-wrap::before {
+  content: "";
+  grid-column: 1;
+  grid-row: 1;
+  background: radial-gradient(120% 120% at 20% 0%, #16294F 0%, #0F1E3D 60%);
+  border-right: 1px solid rgba(176, 133, 66, 0.35);
+}
+
+/* Crest panel content sits on the navy column (additive). */
+.auth-crest {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-self: center;
+  max-width: 420px;
+  padding: var(--space-2xl);
+  color: var(--text-on-dark);
+  z-index: 1;
+}
+
+.auth-crest__mark {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--color-text) 0%, var(--color-primary) 55%, var(--color-secondary) 100%);
-  padding: var(--space-lg);
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  background: rgba(176, 133, 66, 0.14);
+  color: var(--color-gold);
+  margin-bottom: var(--space-lg);
+}
+
+.auth-crest__eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: #CDA75E;
+  margin-bottom: var(--space-sm);
+}
+
+.auth-crest__wordmark {
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.3px;
+  margin: 0 0 var(--space-sm);
+  color: #FFFFFF;
+}
+
+.auth-crest__rule {
+  width: 56px;
+  height: 2px;
+  background: var(--color-gold);
+  margin: var(--space-md) 0;
+  border: none;
+}
+
+.auth-crest__deck {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.7;
+  color: #C9D2E2;
+  margin: 0;
+}
+
+/* Hide the crest panel on mobile (form centers on its own). */
+@media (max-width: 768px) {
+  .auth-crest {
+    display: none;
+  }
 }
 
 .auth-card {
+  grid-column: 2;
+  align-self: center;
+  justify-self: center;
   background: var(--surface);
+  border: 1px solid var(--stone-200);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  padding: var(--space-xl);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-2xl);
   width: 100%;
-  max-width: 380px;
+  max-width: 400px;
 }
 
 .auth-card h1 {
   margin: 0 0 var(--space-xs);
-  font-size: var(--fs-h1);
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
   color: var(--text-strong);
+  position: relative;
+  padding-bottom: 10px;
+}
+
+.auth-card h1::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 44px;
+  height: 2px;
+  background: var(--color-gold);
 }
 
 .auth-sub {
@@ -1244,6 +1454,22 @@ table.data th.data__num {
   text-align: center;
   font-size: var(--fs-sm);
   color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+  .auth-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-lg);
+    background: radial-gradient(140% 120% at 50% -20%, #16294F 0%, #0F1E3D 55%, var(--color-background) 55%);
+  }
+  .auth-wrap::before {
+    display: none;
+  }
+  .auth-card {
+    grid-column: auto;
+  }
 }
 
 /* ============================================================== Toolbar */
@@ -1270,7 +1496,7 @@ table.data th.data__num {
   color: var(--color-primary);
   font-size: var(--fs-xs);
   font-weight: var(--fw-medium);
-  border: 1px solid var(--border);
+  border: 1px solid var(--stone-200);
 }
 
 .chip button {
@@ -1326,8 +1552,8 @@ table.data th.data__num {
 }
 
 pre.code {
-  background: var(--gray-900);
-  color: var(--gray-100);
+  background: var(--stone-900);
+  color: var(--stone-100);
   padding: var(--space-md);
   border-radius: var(--radius-md);
   overflow-x: auto;
@@ -1340,7 +1566,7 @@ pre.code {
 .tabs {
   display: flex;
   gap: var(--space-xs);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--stone-200);
   margin-bottom: var(--space-lg);
 }
 
@@ -1349,6 +1575,7 @@ pre.code {
   border: none;
   background: transparent;
   padding: 10px 14px;
+  font-family: var(--font-body);
   font-size: var(--fs-body);
   font-weight: var(--fw-medium);
   color: var(--text-muted);
@@ -1373,9 +1600,9 @@ pre.code {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(15, 30, 61, 0.45);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1386,11 +1613,14 @@ pre.code {
 .modal {
   background: var(--surface);
   border-radius: var(--radius-xl);
-  padding: var(--space-xl);
   width: 100%;
-  max-width: 520px;
-  max-height: 90vh;
-  overflow-y: auto;
+  max-width: 560px;
+  /* Cap height to the viewport; the header stays pinned and only the body
+     scrolls so the close button is always reachable on long forms. */
+  max-height: min(90vh, 100% - var(--space-lg));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: var(--shadow-xl);
 }
 
@@ -1398,16 +1628,27 @@ pre.code {
   max-width: 720px;
 }
 
+/* Pinned header: never scrolls out of view, keeps the close (X) reachable. */
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-md);
+  gap: var(--space-md);
+  flex: 0 0 auto;
+  padding: var(--space-xl) var(--space-xl) var(--space-md);
+}
+
+/* Scrollable body: the only part that scrolls when content overflows. */
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-xl) var(--space-xl);
 }
 
 .modal-header h2 {
   margin: 0;
-  font-family: var(--font-body);
+  font-family: var(--font-display);
   font-size: var(--fs-h2);
   font-weight: var(--fw-semibold);
   color: var(--text-strong);
@@ -1494,7 +1735,7 @@ pre.code {
 
 .bar-track {
   height: 18px;
-  background: var(--gray-100);
+  background: var(--stone-100);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
@@ -1552,7 +1793,7 @@ pre.code {
 
 .funnel-bar-track {
   height: 24px;
-  background: var(--gray-100);
+  background: var(--stone-100);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
@@ -1571,8 +1812,8 @@ pre.code {
 }
 
 .donut-value {
-  font-family: var(--font-mono);
-  font-size: 24px;
+  font-family: var(--font-display);
+  font-size: 26px;
   font-weight: var(--fw-bold);
   fill: var(--text-strong);
 }
@@ -1586,7 +1827,7 @@ pre.code {
 /* ============================================== Responsive */
 @media (max-width: 1024px) {
   :root {
-    --content-pad: 16px;
+    --content-pad: 20px;
   }
 }
 
@@ -1602,7 +1843,6 @@ pre.code {
     transition: transform var(--dur-base) var(--ease);
   }
 
-  /* On mobile the "collapsed" flag means the drawer is hidden; expanded = open. */
   .sidebar--collapsed {
     width: 288px;
     transform: translateX(-100%);
@@ -1629,7 +1869,7 @@ pre.code {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
+    background: rgba(15, 30, 61, 0.45);
     z-index: 55;
   }
 
@@ -1666,6 +1906,55 @@ pre.code {
 
   .skeleton {
     background-image: none;
-    background: var(--gray-200);
+    background: var(--stone-200);
   }
+}
+
+/* ---- Drag-and-drop list (Approval_Queue prioritisation) ------------------ */
+.dnd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dnd-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.dnd-row[draggable='true'] {
+  cursor: grab;
+}
+
+.dnd-row[draggable='true']:hover {
+  background: var(--surface-hover);
+}
+
+.dnd-row--dragging {
+  opacity: 0.5;
+  border-style: dashed;
+  cursor: grabbing;
+}
+
+.dnd-handle {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+.dnd-row__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
