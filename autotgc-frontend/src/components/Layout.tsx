@@ -50,6 +50,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/leads', label: 'Leads', icon: 'user-plus' },
       { to: '/intake', label: 'Chatbot hồ sơ', icon: 'bot' },
+      { to: '/follow-ups', label: 'Nuôi dưỡng 1-1', icon: 'bell' },
       { to: '/job-orders', label: 'Đơn hàng', icon: 'clipboard-list' },
       { to: '/candidates', label: 'Ứng viên', icon: 'users' },
       { to: '/partners', label: 'Đối tác & Điểm đến', icon: 'compass', roles: ['ADMIN'] },

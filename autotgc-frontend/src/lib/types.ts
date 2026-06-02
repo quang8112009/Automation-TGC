@@ -972,3 +972,68 @@ export interface VisaAdvice {
   housingType: string;
   aiGenerated: boolean;
 }
+
+// ---- Study-abroad: Document OCR, Scholarship, Follow-up --------------------
+
+export type DocExtractionStatus = 'PENDING' | 'EXTRACTED' | 'VERIFIED' | 'FAILED' | 'NEEDS_RESEND';
+
+export interface DocumentExtraction {
+  id: string;
+  candidateId: string;
+  checklistItemId: string | null;
+  docType: string;
+  status: DocExtractionStatus;
+  storageKey: string;
+  extractedFields: Record<string, unknown>;
+  confidence: number;
+  issues: string[];
+  rawText: string;
+  provider: string;
+  verifiedAgainst: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScholarshipResult {
+  programId: string;
+  name: string;
+  country: string;
+  totalCostPerYearVndM: number;
+  estScholarshipPct: number;
+  estScholarshipVndM: number;
+  netCostPerYearVndM: number;
+  shortfallVndM: number;
+  affordable: boolean;
+  notes: string[];
+}
+
+export interface ScholarshipSuggestionsResult {
+  candidateId?: string;
+  results: ScholarshipResult[];
+}
+
+export type FollowUpStatus = 'PENDING' | 'SENT' | 'SKIPPED' | 'CANCELLED';
+
+export interface FollowUpTask {
+  id: string;
+  conversationId: string | null;
+  candidateId: string | null;
+  leadId: string | null;
+  channel: string;
+  externalUserId: string;
+  reason: string;
+  topic: string;
+  message: string;
+  status: FollowUpStatus;
+  dueAt: string;
+  sentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FollowUpListResult {
+  items: FollowUpTask[];
+  total: number;
+  page: number;
+  limit: number;
+}

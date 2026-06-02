@@ -33,6 +33,15 @@ import type {
 import { aiDraftOutreach, aiSuggestJobOrders, aiConsult } from '../api/aiConsultant';
 import { getDestinationSuggestions } from '../api/partners';
 import {
+  getScholarshipSuggestions,
+  listDocExtractions,
+  submitDocExtraction,
+} from '../api/studyAbroad';
+import type {
+  DocumentExtraction,
+  ScholarshipResult,
+} from '../lib/types';
+import {
   createVisaCase,
   generateLogistics,
   getVisaAdvice,
@@ -150,7 +159,9 @@ export function CandidateDetail() {
             <CandidateCopilotPanel candidateId={id} />
             <AiConsultPanel candidateId={id} />
             <DestinationSuggestionsPanel candidateId={id} />
+            <ScholarshipPanel candidateId={id} />
             <VisaCasesPanel candidateId={id} desiredMarket={candidateQuery.data.desiredMarket} />
+            <DocExtractionPanel candidateId={id} />
             <DocumentChecklistPanel candidateId={id} desiredMarket={candidateQuery.data.desiredMarket} />
           </div>
         </div>
@@ -1152,6 +1163,211 @@ function VisaCaseCard({ visaCase, onChanged }: { visaCase: VisaCase; onChanged: 
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---- Scholarship / financial matching (Du học) -----------------------------
+
+function ScholarshipPanel({ candidateId }: { candidateId: string }) {
+  const [budget, setBudget] = useState('');
+  const [gpa, setGpa] = useState('');
+  const [ielts, setIelts] = useState('');
+  const [results, setResults] = useState<ScholarshipResult[] | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      getScholarshipSuggestions(candidateId, {
+        budgetPerYearVndM: budget ? Number(budget) : undefined,
+        gpa: gpa ? Number(gpa) : undefined,
+        ielts: ielts ? Number(ielts) : undefined,
+      }),
+    onSuccess: (res) => setResults(res.results),
+  });
+
+  return (
+    <div className="card">
+      <h2 className="card-title">Học bổng &amp; Tài chính</h2>
+      <div className="muted" style={{ marginBottom: 10 }}>
+        Nhập ngân sách/năm + GPA + IELTS để hệ thống tính chi phí, ước tính học bổng và tìm chương
+        trình trong khả năng chi trả.
+      </div>
+      <div className="grid grid-2">
+        <div className="field">
+          <label>Ngân sách/năm (triệu VND)</label>
+          <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="VD: 300" />
+        </div>
+        <div className="field">
+          <label>GPA (thang 10)</label>
+          <input type="number" step="0.1" value={gpa} onChange={(e) => setGpa(e.target.value)} placeholder="VD: 8.0" />
+        </div>
+        <div className="field">
+          <label>IELTS</label>
+          <input type="number" step="0.5" value={ielts} onChange={(e) => setIelts(e.target.value)} placeholder="VD: 6.5" />
+        </div>
+      </div>
+      <button className="btn btn--secondary btn-sm" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+        {mutation.isPending ? 'Đang tính…' : 'Gợi ý học bổng & chi phí'}
+      </button>
+      {mutation.error != null && <div style={{ marginTop: 12 }}><ErrorMessage error={mutation.error} /></div>}
+
+      {results != null && (
+        <div style={{ marginTop: 14 }}>
+          {results.length === 0 ? (
+            <Empty label="Chưa có chương trình du học nào có dữ liệu tài chính. Hãy bổ sung học phí/học bổng cho điểm đến." />
+          ) : (
+            <div className="table-wrap">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Chương trình</th>
+                    <th>Tổng CP/năm</th>
+                    <th>Học bổng ước tính</th>
+                    <th>CP ròng/năm</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.map((r) => (
+                    <tr key={r.programId}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{r.name}</div>
+                        {r.notes.length > 0 && (
+                          <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>{r.notes.join(' · ')}</div>
+                        )}
+                      </td>
+                      <td>{r.totalCostPerYearVndM} tr</td>
+                      <td>{r.estScholarshipPct}% (≈{r.estScholarshipVndM} tr)</td>
+                      <td>{r.netCostPerYearVndM} tr</td>
+                      <td>
+                        {r.affordable ? (
+                          <span className="badge badge-green">Đủ ngân sách</span>
+                        ) : (
+                          <span className="badge badge-red">Thiếu {r.shortfallVndM} tr</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Document OCR & verification (Du học) ----------------------------------
+
+const DOC_EXTRACT_TYPES = ['IELTS', 'TOEFL', 'TRANSCRIPT', 'FINANCIAL', 'PASSPORT', 'OTHER'];
+const DOC_EXTRACT_STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Chờ xử lý',
+  EXTRACTED: 'Đã bóc tách',
+  VERIFIED: 'Đã xác thực',
+  FAILED: 'Không đạt',
+  NEEDS_RESEND: 'Cần gửi lại',
+};
+const DOC_EXTRACT_STATUS_BADGE: Record<string, string> = {
+  PENDING: 'badge-gray',
+  EXTRACTED: 'badge-blue',
+  VERIFIED: 'badge-green',
+  FAILED: 'badge-red',
+  NEEDS_RESEND: 'badge-yellow',
+};
+
+function DocExtractionPanel({ candidateId }: { candidateId: string }) {
+  const queryClient = useQueryClient();
+  const key = ['docExtractions', candidateId] as const;
+  const [docType, setDocType] = useState('IELTS');
+  const [rawText, setRawText] = useState('');
+  const [minScore, setMinScore] = useState('');
+
+  const listQuery = useQuery({
+    queryKey: key,
+    queryFn: () => listDocExtractions(candidateId),
+  });
+
+  const submitMutation = useMutation({
+    mutationFn: () =>
+      submitDocExtraction({
+        candidateId,
+        docType,
+        rawText: rawText.trim() || undefined,
+        requirement: minScore ? { minScore: Number(minScore) } : undefined,
+      }),
+    onSuccess: () => {
+      setRawText('');
+      void queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
+
+  return (
+    <div className="card">
+      <h2 className="card-title">Bóc tách &amp; Xác thực hồ sơ (AI)</h2>
+      <div className="muted" style={{ marginBottom: 10 }}>
+        Dán nội dung OCR của chứng chỉ (VD: "Overall Band Score 6.5") để hệ thống bóc tách điểm và
+        tự đối chiếu yêu cầu. Khi chưa cắm vision model, hệ thống sẽ yêu cầu gửi lại ảnh rõ hơn.
+      </div>
+      <div className="grid grid-2">
+        <div className="field">
+          <label>Loại giấy tờ</label>
+          <select value={docType} onChange={(e) => setDocType(e.target.value)}>
+            {DOC_EXTRACT_TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Điểm yêu cầu tối thiểu (tùy chọn)</label>
+          <input type="number" step="0.5" value={minScore} onChange={(e) => setMinScore(e.target.value)} placeholder="VD: 6.0" />
+        </div>
+      </div>
+      <div className="field">
+        <label>Nội dung OCR / văn bản chứng chỉ</label>
+        <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Dán text đọc được từ ảnh chứng chỉ…" />
+      </div>
+      <button className="btn btn-primary btn-sm" disabled={submitMutation.isPending} onClick={() => submitMutation.mutate()}>
+        <Icon name="sparkles" size={16} /> {submitMutation.isPending ? 'Đang xử lý…' : 'Bóc tách & xác thực'}
+      </button>
+      {submitMutation.error != null && <ErrorMessage error={submitMutation.error} />}
+
+      {listQuery.isLoading ? (
+        <Loading label="Đang tải…" />
+      ) : listQuery.data && listQuery.data.items.length > 0 ? (
+        <div className="table-wrap" style={{ marginTop: 12 }}>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Loại</th>
+                <th>Kết quả bóc tách</th>
+                <th>Trạng thái</th>
+                <th>Vấn đề</th>
+              </tr>
+            </thead>
+            <tbody>
+              {listQuery.data.items.map((d: DocumentExtraction) => (
+                <tr key={d.id}>
+                  <td>{d.docType}</td>
+                  <td style={{ whiteSpace: 'normal' }}>
+                    {Object.entries(d.extractedFields ?? {})
+                      .map(([k, v]) => `${k}: ${String(v)}`)
+                      .join(', ') || '—'}
+                  </td>
+                  <td>
+                    <span className={`badge ${DOC_EXTRACT_STATUS_BADGE[d.status] ?? 'badge-gray'}`}>
+                      {DOC_EXTRACT_STATUS_LABEL[d.status] ?? d.status}
+                    </span>
+                  </td>
+                  <td className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
+                    {(d.issues ?? []).join(', ') || '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   );
 }

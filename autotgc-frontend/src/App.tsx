@@ -52,6 +52,7 @@ const DocumentCatalog = lazy(() =>
 );
 const Intake = lazy(() => import('./pages/Intake').then((m) => ({ default: m.Intake })));
 const Partners = lazy(() => import('./pages/Partners').then((m) => ({ default: m.Partners })));
+const FollowUps = lazy(() => import('./pages/FollowUps').then((m) => ({ default: m.FollowUps })));
 
 function ProtectedShell() {
   return (
@@ -86,6 +87,7 @@ export function App() {
           <Route path="/candidates" element={<Candidates />} />
           <Route path="/candidates/:id" element={<CandidateDetail />} />
           <Route path="/intake" element={<Intake />} />
+          <Route path="/follow-ups" element={<FollowUps />} />
           <Route
             path="/partners"
             element={

@@ -901,6 +901,12 @@ model DestinationProgram {
   minLanguageLevel String           @default("") // e.g. N4 | IELTS5.5 | ""
   budgetMinVndM   Int? // estimated cost floor (million VND)
   budgetMaxVndM   Int?
+  // --- Study-abroad financial fields (scholarship matching; additive) ---
+  tuitionPerYearVndM   Int? // học phí / năm (triệu VND)
+  livingCostPerYearVndM Int? // sinh hoạt phí / năm (triệu VND)
+  scholarshipMaxPct    Int? // % học bổng tối đa có thể đạt (0..100)
+  minGpa               Float? // GPA tối thiểu (thang 10) để xét học bổng
+  minIelts             Float? // IELTS tối thiểu để xét học bổng
   industries      Json              @default("[]") // string[]
   conditions      Json              @default("[]") // free-form extra condition strings (shown to agent)
   status          DestinationStatus @default(OPEN)
@@ -1002,4 +1008,77 @@ model LogisticsPlan {
   notes         String   @default("")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+
+// ===========================================================================
+// Study-abroad enhancements (additive): Document OCR & verification, Financial
+// & Scholarship matching, and Behavior-based follow-up nurturing.
+//   1. DocumentExtraction — OCR/structured-extraction result for a checklist
+//      item (IELTS/TOEFL/transcript/financial proof) + auto verification.
+//   2. DestinationProgram financial fields (below, via ALTER in migration) feed
+//      the pure scholarship matcher.
+//   3. FollowUpTask — queued personalized nurture messages for drop-off contacts.
+// All additive; no existing model/field is modified destructively.
+// ===========================================================================
+
+enum DocExtractionStatus {
+  PENDING // queued, not yet processed
+  EXTRACTED // fields parsed, awaiting verification
+  VERIFIED // parsed + meets requirement + in-date
+  FAILED // unreadable / parse error
+  NEEDS_RESEND // image too blurry / missing data → ask the contact to resend
+}
+
+// Structured extraction + verification for one uploaded document. References a
+// DocumentChecklistItem by id (soft reference, no FK) so it stays additive.
+model DocumentExtraction {
+  id              String              @id @default(uuid())
+  candidateId     String
+  checklistItemId String? // soft reference to DocumentChecklistItem.id
+  docType         String // IELTS | TOEFL | TRANSCRIPT | FINANCIAL | PASSPORT | OTHER
+  status          DocExtractionStatus @default(PENDING)
+  storageKey      String              @default("") // where the source image is stored
+  extractedFields Json                @default("{}") // { score?, expiryDate?, gpa?, amountVndM?, ... }
+  confidence      Float               @default(0) // 0..1 best-effort
+  issues          Json                @default("[]") // string[] (e.g. blurry, expired, below_requirement)
+  rawText         String              @default("")
+  provider        String              @default("none") // ocr provider id or 'none'
+  verifiedAgainst Json? // { requirement, met } snapshot used for verification
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([candidateId])
+  @@index([checklistItemId])
+  @@index([status])
+}
+
+enum FollowUpStatus {
+  PENDING // scheduled, not yet sent
+  SENT // delivered (or attempted) to the channel
+  SKIPPED // contact re-engaged before the due time
+  CANCELLED // manually cancelled / no longer relevant
+}
+
+// A queued, behavior-based nurture follow-up for a drop-off contact. A
+// background agent fills the message and the scheduler/worker sends it.
+model FollowUpTask {
+  id             String         @id @default(uuid())
+  conversationId String? // soft ref to IntakeConversation.id
+  candidateId    String?
+  leadId         String?
+  channel        String // FACEBOOK | ZALO | WEBSITE
+  externalUserId String
+  reason         String         @default("") // e.g. drop_off_after_inquiry
+  topic          String         @default("") // last-known interest (e.g. "ĐH Tokyo")
+  message        String         @default("")
+  status         FollowUpStatus @default(PENDING)
+  dueAt          DateTime
+  sentAt         DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([status, dueAt])
+  @@index([conversationId])
+  @@index([externalUserId])
 }
