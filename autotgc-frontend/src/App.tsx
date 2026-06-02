@@ -50,6 +50,8 @@ const Reports = lazy(() => import('./pages/Reports').then((m) => ({ default: m.R
 const DocumentCatalog = lazy(() =>
   import('./pages/DocumentCatalog').then((m) => ({ default: m.DocumentCatalog })),
 );
+const Intake = lazy(() => import('./pages/Intake').then((m) => ({ default: m.Intake })));
+const Partners = lazy(() => import('./pages/Partners').then((m) => ({ default: m.Partners })));
 
 function ProtectedShell() {
   return (
@@ -83,6 +85,15 @@ export function App() {
           <Route path="/job-orders" element={<JobOrders />} />
           <Route path="/candidates" element={<Candidates />} />
           <Route path="/candidates/:id" element={<CandidateDetail />} />
+          <Route path="/intake" element={<Intake />} />
+          <Route
+            path="/partners"
+            element={
+              <RequireAuth roles={['ADMIN']}>
+                <Partners />
+              </RequireAuth>
+            }
+          />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/reports" element={<Reports />} />
           <Route

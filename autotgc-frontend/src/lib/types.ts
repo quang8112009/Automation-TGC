@@ -770,3 +770,205 @@ export interface AutopilotSummary {
   scheduled: number;
   skipped: number;
 }
+
+// ---- Omni-channel Intake (chatbot FB/Zalo) ---------------------------------
+
+export type IntakeChannel = 'FACEBOOK' | 'ZALO' | 'WEBSITE';
+export type IntakeStatus = 'ACTIVE' | 'COMPLETED' | 'HANDED_OFF' | 'ABANDONED';
+export type IntakeDirection = 'INBOUND' | 'OUTBOUND';
+
+export interface IntakeMessage {
+  id: string;
+  conversationId: string;
+  direction: IntakeDirection;
+  text: string;
+  fieldKey: string | null;
+  createdAt: string;
+}
+
+export interface IntakeConversation {
+  id: string;
+  channel: IntakeChannel;
+  externalUserId: string;
+  displayName: string | null;
+  flowKey: string;
+  status: IntakeStatus;
+  currentFieldKey: string | null;
+  collected: Record<string, unknown>;
+  leadId: string | null;
+  candidateId: string | null;
+  assignedTo: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messages?: IntakeMessage[];
+}
+
+export interface IntakeListResult {
+  items: IntakeConversation[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface IntakeSimulateResult {
+  conversationId: string;
+  status: string;
+  reply: string | null;
+  completed: boolean;
+  collected: Record<string, unknown>;
+  leadId: string | null;
+}
+
+// ---- Partners (đối tác) + Destinations (điểm đến XKLĐ) ---------------------
+
+export type PartnerType = 'EMPLOYER' | 'SCHOOL' | 'BROKER' | 'SERVICE';
+export type PartnerStatus = 'ACTIVE' | 'PAUSED' | 'ENDED';
+export type DestinationStatus = 'OPEN' | 'PAUSED' | 'CLOSED';
+
+export interface PartnerOrg {
+  id: string;
+  name: string;
+  type: PartnerType;
+  country: string;
+  contactName: string;
+  phone: string;
+  email: string;
+  status: PartnerStatus;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PartnerListResult {
+  items: PartnerOrg[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface DestinationProgram {
+  id: string;
+  name: string;
+  country: string;
+  visaType: string;
+  partnerId: string | null;
+  minAge: number | null;
+  maxAge: number | null;
+  gender: string;
+  requiredLanguage: string;
+  minLanguageLevel: string;
+  budgetMinVndM: number | null;
+  budgetMaxVndM: number | null;
+  industries: unknown;
+  conditions: unknown;
+  status: DestinationStatus;
+  notes: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DestinationListResult {
+  items: DestinationProgram[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/** One ranked destination suggestion for a candidate (đối chiếu DB & gợi ý). */
+export interface DestinationSuggestion {
+  programId: string;
+  name: string;
+  country: string;
+  score: number;
+  matched: string[];
+  blockers: string[];
+  eligible: boolean;
+}
+
+export interface DestinationSuggestionsResult {
+  candidateId: string;
+  suggestions: DestinationSuggestion[];
+}
+
+// ---- Visa Smart Checklist + Logistics --------------------------------------
+
+export type VisaCaseStatus =
+  | 'OPEN'
+  | 'IN_PROGRESS'
+  | 'SUBMITTED'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'CANCELLED';
+export type VisaTaskStatus = 'PENDING' | 'IN_PROGRESS' | 'DONE' | 'BLOCKED';
+export type VisaTaskCategory =
+  | 'DOCUMENT'
+  | 'INSURANCE'
+  | 'FLIGHT'
+  | 'HOUSING'
+  | 'PICKUP'
+  | 'FEE'
+  | 'OTHER';
+
+export interface VisaTask {
+  id: string;
+  caseId: string;
+  code: string;
+  label: string;
+  category: VisaTaskCategory;
+  required: boolean;
+  status: VisaTaskStatus;
+  dueAt: string | null;
+  note: string | null;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LogisticsPlan {
+  id: string;
+  caseId: string;
+  flightInfo: unknown;
+  insuranceType: string;
+  insuranceInfo: unknown;
+  pickupService: string;
+  pickupInfo: unknown;
+  housingType: string;
+  housingInfo: unknown;
+  aiGenerated: boolean;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VisaCase {
+  id: string;
+  candidateId: string;
+  country: string;
+  visaType: string;
+  status: VisaCaseStatus;
+  targetIntakeDate: string | null;
+  submissionDeadline: string | null;
+  aiGenerated: boolean;
+  notes: string;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  tasks?: VisaTask[];
+  logistics?: LogisticsPlan | null;
+}
+
+export interface VisaCaseListResult {
+  items: VisaCase[];
+  total: number;
+}
+
+export interface VisaAdvice {
+  advisory: string;
+  nextTasks: string[];
+  insuranceType: string;
+  housingType: string;
+  aiGenerated: boolean;
+}

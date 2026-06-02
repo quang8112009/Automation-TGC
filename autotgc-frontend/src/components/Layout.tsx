@@ -49,8 +49,10 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'CRM tuyển dụng',
     items: [
       { to: '/leads', label: 'Leads', icon: 'user-plus' },
+      { to: '/intake', label: 'Chatbot hồ sơ', icon: 'bot' },
       { to: '/job-orders', label: 'Đơn hàng', icon: 'clipboard-list' },
       { to: '/candidates', label: 'Ứng viên', icon: 'users' },
+      { to: '/partners', label: 'Đối tác & Điểm đến', icon: 'compass', roles: ['ADMIN'] },
       { to: '/analytics', label: 'Phân tích tuyển dụng', icon: 'bar-chart-3' },
     ],
   },

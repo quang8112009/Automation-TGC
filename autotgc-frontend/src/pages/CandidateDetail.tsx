@@ -31,6 +31,15 @@ import type {
   DocumentChecklistResult,
 } from '../api/recruitment';
 import { aiDraftOutreach, aiSuggestJobOrders, aiConsult } from '../api/aiConsultant';
+import { getDestinationSuggestions } from '../api/partners';
+import {
+  createVisaCase,
+  generateLogistics,
+  getVisaAdvice,
+  listVisaCases,
+  updateVisaTask,
+} from '../api/visa';
+import type { DestinationSuggestion, VisaCase, VisaTask } from '../lib/types';
 import { useAuth } from '../auth/AuthContext';
 import { Empty, ErrorMessage, Loading, SuccessMessage, formatDate } from '../components/ui';
 import { StageBadge } from '../components/StageBadge';
@@ -140,6 +149,8 @@ export function CandidateDetail() {
             <HistoryTimeline history={candidateQuery.data.history} />
             <CandidateCopilotPanel candidateId={id} />
             <AiConsultPanel candidateId={id} />
+            <DestinationSuggestionsPanel candidateId={id} />
+            <VisaCasesPanel candidateId={id} desiredMarket={candidateQuery.data.desiredMarket} />
             <DocumentChecklistPanel candidateId={id} desiredMarket={candidateQuery.data.desiredMarket} />
           </div>
         </div>
@@ -878,6 +889,268 @@ function DocumentChecklistPanel({
         </>
       ) : (
         <Empty label="Không tải được checklist." />
+      )}
+    </div>
+  );
+}
+
+// ---- Destination suggestions (đối chiếu DB & gợi ý cho tư vấn) --------------
+
+const SUGG_MARKET_LABEL: Record<string, string> = {
+  JAPAN: 'Nhật Bản',
+  KOREA: 'Hàn Quốc',
+  GERMANY: 'Đức',
+  TAIWAN: 'Đài Loan',
+  AUSTRALIA: 'Úc',
+  USA: 'Mỹ',
+  CANADA: 'Canada',
+  UK: 'Anh',
+  OTHER: 'Khác',
+};
+
+function DestinationSuggestionsPanel({ candidateId }: { candidateId: string }) {
+  const [suggestions, setSuggestions] = useState<DestinationSuggestion[] | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: () => getDestinationSuggestions(candidateId),
+    onSuccess: (res) => setSuggestions(res.suggestions),
+  });
+
+  return (
+    <div className="card">
+      <h2 className="card-title">Gợi ý điểm đến phù hợp</h2>
+      <div className="muted" style={{ marginBottom: 10 }}>
+        Đối chiếu hồ sơ ứng viên với cơ sở dữ liệu chương trình XKLĐ và xếp hạng theo độ phù hợp
+        (đủ điều kiện ưu tiên trước, kèm lý do nếu chưa đạt).
+      </div>
+      <button className="btn btn--secondary btn-sm" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+        {mutation.isPending ? 'Đang đối chiếu…' : 'Gợi ý điểm đến'}
+      </button>
+      {mutation.error != null && <div style={{ marginTop: 12 }}><ErrorMessage error={mutation.error} /></div>}
+
+      {suggestions != null && (
+        <div style={{ marginTop: 14 }}>
+          {suggestions.length === 0 ? (
+            <Empty label="Chưa tìm thấy chương trình phù hợp. Hãy bổ sung dữ liệu điểm đến hoặc nguyện vọng ứng viên." />
+          ) : (
+            <div className="steps-list">
+              {suggestions.map((s) => (
+                <div key={s.programId} className="step-row" style={{ alignItems: 'flex-start' }}>
+                  <div className="step-index" style={{ background: s.eligible ? 'var(--success, #2e7d32)' : 'var(--stone-300, #bbb)' }}>
+                    {s.score}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div>
+                      <strong>{s.name}</strong>{' '}
+                      <span className="muted">· {SUGG_MARKET_LABEL[s.country] ?? s.country}</span>{' '}
+                      {s.eligible ? (
+                        <span className="badge badge-green">Đủ điều kiện</span>
+                      ) : (
+                        <span className="badge badge-red">Chưa đạt</span>
+                      )}
+                    </div>
+                    {s.matched.length > 0 && (
+                      <div className="muted" style={{ marginTop: 4, fontSize: 'var(--fs-xs)' }}>
+                        ✓ {s.matched.join(' · ')}
+                      </div>
+                    )}
+                    {s.blockers.length > 0 && (
+                      <div style={{ marginTop: 4, fontSize: 'var(--fs-xs)', color: 'var(--danger, #c0392b)' }}>
+                        ✗ {s.blockers.join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Visa Smart Checklist + logistics + AI advisory ------------------------
+
+const VISA_COUNTRIES = ['AUSTRALIA', 'USA', 'CANADA', 'UK', 'JAPAN', 'KOREA', 'GERMANY', 'TAIWAN'];
+const VISA_TASK_STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Chờ làm',
+  IN_PROGRESS: 'Đang làm',
+  DONE: 'Hoàn tất',
+  BLOCKED: 'Vướng mắc',
+};
+const VISA_TASK_STATUS_BADGE: Record<string, string> = {
+  PENDING: 'badge-gray',
+  IN_PROGRESS: 'badge-yellow',
+  DONE: 'badge-green',
+  BLOCKED: 'badge-red',
+};
+const VISA_TASK_STATUSES = ['PENDING', 'IN_PROGRESS', 'DONE', 'BLOCKED'];
+
+function VisaCasesPanel({
+  candidateId,
+  desiredMarket,
+}: {
+  candidateId: string;
+  desiredMarket: string | null;
+}) {
+  const queryClient = useQueryClient();
+  const casesKey = ['visa', 'cases', candidateId] as const;
+  const [country, setCountry] = useState(desiredMarket && VISA_COUNTRIES.includes(desiredMarket) ? desiredMarket : 'AUSTRALIA');
+  const [intakeDate, setIntakeDate] = useState('');
+
+  const casesQuery = useQuery({
+    queryKey: casesKey,
+    queryFn: () => listVisaCases(candidateId),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createVisaCase({ candidateId, country, targetIntakeDate: intakeDate || undefined }),
+    onSuccess: () => {
+      setIntakeDate('');
+      void queryClient.invalidateQueries({ queryKey: casesKey });
+    },
+  });
+
+  return (
+    <div className="card">
+      <h2 className="card-title">Hồ sơ Visa &amp; Đưa đón</h2>
+      <div className="muted" style={{ marginBottom: 10 }}>
+        Tạo checklist hồ sơ visa tùy chỉnh theo quốc gia (kèm hạn nộp tự tính) và gợi ý hậu cần
+        (bảo hiểm OSHC/IHS, vé máy bay, đưa đón sân bay, chỗ ở).
+      </div>
+
+      <div className="toolbar">
+        <div className="field">
+          <label>Quốc gia</label>
+          <select value={country} onChange={(e) => setCountry(e.target.value)}>
+            {VISA_COUNTRIES.map((c) => (
+              <option key={c} value={c}>{SUGG_MARKET_LABEL[c] ?? c}</option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Ngày nhập học/xuất cảnh (dự kiến)</label>
+          <input type="date" value={intakeDate} onChange={(e) => setIntakeDate(e.target.value)} />
+        </div>
+        <button className="btn btn-primary btn-sm" disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>
+          <Icon name="plus" size={16} /> {createMutation.isPending ? 'Đang tạo…' : 'Tạo hồ sơ'}
+        </button>
+      </div>
+      {createMutation.error != null && <ErrorMessage error={createMutation.error} />}
+
+      {casesQuery.isLoading ? (
+        <Loading label="Đang tải…" />
+      ) : casesQuery.error ? (
+        <ErrorMessage error={casesQuery.error} />
+      ) : casesQuery.data && casesQuery.data.items.length > 0 ? (
+        <div style={{ marginTop: 12 }}>
+          {casesQuery.data.items.map((c) => (
+            <VisaCaseCard key={c.id} visaCase={c} onChanged={() => queryClient.invalidateQueries({ queryKey: casesKey })} />
+          ))}
+        </div>
+      ) : (
+        <Empty label="Chưa có hồ sơ visa nào. Tạo một hồ sơ ở trên." />
+      )}
+    </div>
+  );
+}
+
+function VisaCaseCard({ visaCase, onChanged }: { visaCase: VisaCase; onChanged: () => void }) {
+  const [advice, setAdvice] = useState<string | null>(null);
+
+  const adviceMutation = useMutation({
+    mutationFn: () => getVisaAdvice(visaCase.id),
+    onSuccess: (res) => setAdvice(res.advisory),
+  });
+  const logisticsMutation = useMutation({
+    mutationFn: () => generateLogistics(visaCase.id),
+    onSuccess: () => onChanged(),
+  });
+  const taskStatusMutation = useMutation({
+    mutationFn: ({ taskId, status }: { taskId: string; status: string }) =>
+      updateVisaTask(taskId, { status }),
+    onSuccess: () => onChanged(),
+  });
+
+  const tasks: VisaTask[] = visaCase.tasks ?? [];
+  const done = tasks.filter((t) => t.status === 'DONE').length;
+
+  return (
+    <div style={{ border: '1px solid var(--border, #ddd)', borderRadius: 10, padding: 12, marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <strong>{SUGG_MARKET_LABEL[visaCase.country] ?? visaCase.country}</strong>{' '}
+          <span className="badge badge-blue">{visaCase.status}</span>
+          <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
+            {done}/{tasks.length} mục hoàn tất
+            {visaCase.targetIntakeDate ? ` · nhập học ${formatDate(visaCase.targetIntakeDate)}` : ''}
+          </div>
+        </div>
+        <div className="row-actions">
+          <button className="btn btn-sm" disabled={adviceMutation.isPending} onClick={() => adviceMutation.mutate()}>
+            <Icon name="sparkles" size={14} /> {adviceMutation.isPending ? 'Đang tư vấn…' : 'Tư vấn AI'}
+          </button>
+          <button className="btn btn-sm" disabled={logisticsMutation.isPending} onClick={() => logisticsMutation.mutate()}>
+            {logisticsMutation.isPending ? 'Đang tạo…' : 'Gợi ý hậu cần'}
+          </button>
+        </div>
+      </div>
+
+      {advice && (
+        <pre className="code" style={{ whiteSpace: 'pre-wrap', marginTop: 10 }}>{advice}</pre>
+      )}
+
+      {visaCase.logistics && (
+        <div className="success-box" style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>
+          <strong>Hậu cần:</strong> Bảo hiểm {visaCase.logistics.insuranceType || '—'} · Chỗ ở{' '}
+          {visaCase.logistics.housingType || '—'}
+          {visaCase.logistics.notes ? `\n${visaCase.logistics.notes}` : ''}
+        </div>
+      )}
+
+      {tasks.length > 0 && (
+        <div className="table-wrap" style={{ marginTop: 10 }}>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Mục</th>
+                <th>Loại</th>
+                <th>Hạn</th>
+                <th>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((t) => (
+                <tr key={t.id}>
+                  <td style={{ whiteSpace: 'normal' }}>
+                    {t.label} {t.required && <span className="badge badge-blue">Bắt buộc</span>}
+                  </td>
+                  <td>{t.category}</td>
+                  <td>{t.dueAt ? formatDate(t.dueAt) : '—'}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className={`badge ${VISA_TASK_STATUS_BADGE[t.status]}`}>
+                        {VISA_TASK_STATUS_LABEL[t.status]}
+                      </span>
+                      <select
+                        value={t.status}
+                        disabled={taskStatusMutation.isPending}
+                        onChange={(e) => taskStatusMutation.mutate({ taskId: t.id, status: e.target.value })}
+                        style={{ width: 'auto', height: 32, padding: '4px 8px' }}
+                      >
+                        {VISA_TASK_STATUSES.map((s) => (
+                          <option key={s} value={s}>{VISA_TASK_STATUS_LABEL[s]}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
