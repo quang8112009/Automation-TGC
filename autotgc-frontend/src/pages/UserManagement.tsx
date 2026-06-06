@@ -116,7 +116,7 @@ export function UserManagement() {
         </div>
       </div>
 
-      <div className="notice" style={{ marginBottom: 12 }}>
+      <div className="notice" style={{ marginBottom: 'var(--space-md)' }}>
         Quản trị viên có thể tạo tài khoản SALES, khóa/mở khóa truy cập, đổi vai trò và
         đặt lại mật khẩu cho nhân viên. Tài khoản bị khóa sẽ không thể đăng nhập.
       </div>
@@ -126,7 +126,7 @@ export function UserManagement() {
 
       <div className="card">
         {usersQuery.isLoading ? (
-          <Loading label="Đang tải danh sách tài khoản…" />
+          <Loading variant="table" rows={6} label="Đang tải danh sách tài khoản…" />
         ) : usersQuery.error ? (
           <ErrorMessage error={usersQuery.error} />
         ) : usersQuery.data && usersQuery.data.users.length > 0 ? (
@@ -332,7 +332,7 @@ function CreateSalesUserModal({
           onChange={(e) => set('password', e.target.value)}
           placeholder="Tối thiểu 8 ký tự"
         />
-        <div className="muted" style={{ marginTop: 4 }}>
+        <div className="muted" style={{ marginTop: 'var(--space-xs)' }}>
           Mật khẩu được lưu ở dạng băm (hash) trên máy chủ; tài khoản mới luôn có vai trò SALES.
         </div>
       </div>

@@ -24,6 +24,7 @@ import type { ContentGenerator } from '../../strategy/personaService';
 import { isMarket, marketLabel } from '../markets';
 import type { Market } from '../markets';
 import type { BrandKnowledgeProvider } from '../brandKnowledge';
+import { enforceAiGeneratedFlag } from '../../infra/aiOptional';
 
 /** Trend lifecycle status (mirrors Prisma enum TrendStatus). */
 export type TrendStatus = 'DISCOVERED' | 'REVIEWED' | 'ADOPTED' | 'DISMISSED';
@@ -294,7 +295,7 @@ export class TrendResearchService {
       created.push(signal);
     }
 
-    return { created, aiGenerated };
+    return enforceAiGeneratedFlag({ created, aiGenerated }, aiGenerated ? 'AI' : 'FALLBACK');
   }
 
   /** Resolve seeds from AI (if any) with a deterministic heuristic fallback. */

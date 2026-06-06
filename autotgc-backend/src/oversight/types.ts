@@ -7,7 +7,16 @@
  */
 
 /** Supervised Important_Action kinds recorded by the oversight layer (Req 2.1). */
-export type ActivityAction = 'DOCUMENT_VERIFIED' | 'CANDIDATE_STAGE_CHANGED' | 'LEAD_STATUS_CHANGED';
+export type ActivityAction =
+  | 'DOCUMENT_VERIFIED'
+  | 'CANDIDATE_STAGE_CHANGED'
+  | 'LEAD_STATUS_CHANGED'
+  | 'PLATFORM_TOKEN_REFRESHED'
+  | 'DOCUMENT_CATALOG_UPDATED'
+  | 'KNOWLEDGE_CREATED'
+  | 'KNOWLEDGE_UPDATED'
+  | 'KNOWLEDGE_DEACTIVATED'
+  | 'AUTHZ_DENIED';
 
 /** Notification kind fanned out to ADMIN recipients (Req 8.3). */
 export type NotificationKind = 'ACTIVITY';

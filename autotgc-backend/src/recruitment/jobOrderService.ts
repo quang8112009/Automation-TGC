@@ -5,6 +5,7 @@
  * this layer owns the domain rules.
  */
 import type { JobOrder, Prisma, PrismaClient } from '@prisma/client';
+import type { AuthInfo } from '../http/authMiddleware';
 import {
   blank,
   isJobOrderStatus,
@@ -16,7 +17,12 @@ import type {
   RecruitmentMarketValue,
   VisaTypeValue,
 } from './validation';
-import { ConflictError, NotFoundError, ValidationError } from '../infra/errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../infra/errors';
 
 export interface CreateJobOrderInput {
   code?: string;
@@ -189,10 +195,16 @@ export class JobOrderService {
     return this.prisma.jobOrder.update({ where: { id }, data });
   }
 
-  async get(id: string): Promise<JobOrder> {
+  async get(id: string, actor: AuthInfo): Promise<JobOrder> {
     const order = await this.prisma.jobOrder.findUnique({ where: { id } });
     if (!order) {
       throw new NotFoundError('Job order not found');
+    }
+    // SALES may only access its own assigned job-orders (mirrors CandidateService).
+    // Enforced here too because an unassigned order (assignedTo null) would
+    // otherwise bypass the route guard, whose ownerUserId would be undefined.
+    if (actor.role === 'SALES' && order.assignedTo !== actor.userId) {
+      throw new ForbiddenError();
     }
     return order;
   }
@@ -201,8 +213,9 @@ export class JobOrderService {
     filter: JobOrderListFilter,
     page: number,
     limit: number,
+    actor: AuthInfo,
   ): Promise<JobOrderListResult> {
-    const where = this.buildWhere(filter);
+    const where = this.buildWhere(filter, actor);
     const safePage = page > 0 ? page : 1;
     const safeLimit = limit > 0 ? limit : 20;
 
@@ -219,8 +232,8 @@ export class JobOrderService {
   }
 
   /** Matching search: same filter set as list but returns all matches (no paging). */
-  async search(filter: JobOrderListFilter): Promise<JobOrder[]> {
-    const where = this.buildWhere(filter);
+  async search(filter: JobOrderListFilter, actor: AuthInfo): Promise<JobOrder[]> {
+    const where = this.buildWhere(filter, actor);
     return this.prisma.jobOrder.findMany({ where, orderBy: { createdAt: 'desc' } });
   }
 
@@ -240,7 +253,7 @@ export class JobOrderService {
     return this.prisma.jobOrder.update({ where: { id }, data: { status } });
   }
 
-  private buildWhere(filter: JobOrderListFilter): Prisma.JobOrderWhereInput {
+  private buildWhere(filter: JobOrderListFilter, actor: AuthInfo): Prisma.JobOrderWhereInput {
     const where: Prisma.JobOrderWhereInput = {};
     if (filter.market !== undefined) {
       if (!isRecruitmentMarket(filter.market)) {
@@ -260,6 +273,10 @@ export class JobOrderService {
         throw new ValidationError(`Invalid status: ${String(filter.status)}`, 'INVALID_JOB_ORDER_STATUS');
       }
       where.status = filter.status;
+    }
+    // SALES sees only its own assigned job-orders (mirrors CandidateService scoping).
+    if (actor.role === 'SALES') {
+      where.assignedTo = actor.userId;
     }
     return where;
   }

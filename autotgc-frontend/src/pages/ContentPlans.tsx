@@ -35,6 +35,7 @@ import {
   formatDate,
 } from '../components/ui';
 import { Icon } from '../components/Icon';
+import { PersonaPicker } from '../components/PersonaPicker';
 import {
   MARKETING_CHANNELS,
   MARKETING_CHANNEL_LABELS,
@@ -121,7 +122,7 @@ export function ContentPlans() {
 
       <div className="card">
         {plansQuery.isLoading ? (
-          <Loading label="Đang tải…" />
+          <Loading variant="table" rows={6} label="Đang tải kế hoạch…" />
         ) : plansQuery.error ? (
           <ErrorMessage error={plansQuery.error} />
         ) : plans.length > 0 ? (
@@ -140,7 +141,7 @@ export function ContentPlans() {
               <tbody>
                 {plans.map((p) => (
                   <tr key={p.id}>
-                    <td style={{ whiteSpace: 'normal', maxWidth: 300 }}>{p.title}</td>
+                    <td style={{ whiteSpace: 'normal', maxWidth: '40ch' }}>{p.title}</td>
                     <td>{marketingMarketLabel(p.market)}</td>
                     <td>{objectiveLabel(p.objective)}</td>
                     <td>
@@ -160,7 +161,16 @@ export function ContentPlans() {
             </table>
           </div>
         ) : (
-          <Empty label="Chưa có kế hoạch nội dung nào. Hãy tạo kế hoạch mới." />
+          <Empty
+            icon="calendar-days"
+            label="Chưa có kế hoạch nội dung nào. Hãy tạo kế hoạch mới."
+            action={
+              <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+                <Icon name="plus" size={16} />
+                Kế hoạch mới
+              </button>
+            }
+          />
         )}
       </div>
 
@@ -248,7 +258,7 @@ function CreatePlanModal({
           {MARKETING_CHANNELS.map((c) => (
             <label
               key={c}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0, minWidth: 120 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', margin: 0, minWidth: 120 }}
             >
               <input
                 type="checkbox"
@@ -314,7 +324,7 @@ function PlanDetail({ planId, onClose }: { planId: string; onClose: () => void }
   return (
     <Modal title={plan ? plan.title : 'Kế hoạch nội dung'} onClose={onClose}>
       {planQuery.isLoading ? (
-        <Loading label="Đang tải…" />
+        <Loading variant="table" rows={4} label="Đang tải kế hoạch…" />
       ) : planQuery.error ? (
         <ErrorMessage error={planQuery.error} />
       ) : plan ? (
@@ -337,7 +347,7 @@ function PlanDetail({ planId, onClose }: { planId: string; onClose: () => void }
             </dd>
           </dl>
 
-          <div className="row-actions" style={{ margin: '12px 0' }}>
+          <div className="row-actions" style={{ margin: 'var(--space-md) 0' }}>
             <button
               className="btn btn-primary btn-sm"
               disabled={plan.status !== 'DRAFT' || activateMutation.isPending}
@@ -356,7 +366,7 @@ function PlanDetail({ planId, onClose }: { planId: string; onClose: () => void }
 
           <h3>Mục nội dung ({plan.items.length})</h3>
           {plan.items.length === 0 ? (
-            <Empty label="Kế hoạch này chưa có mục nội dung." />
+            <Empty icon="file-text" label="Kế hoạch này chưa có mục nội dung." />
           ) : (
             <div className="table-wrap">
               <table className="data">
@@ -411,7 +421,7 @@ function PlanItemRow({
         <td>{item.orderIndex + 1}</td>
         <td>{channelLabel(item.channel)}</td>
         <td>{contentFormatLabel(item.format)}</td>
-        <td style={{ whiteSpace: 'normal', maxWidth: 260 }}>{item.topic || item.keyword || '—'}</td>
+        <td style={{ whiteSpace: 'normal', maxWidth: '34ch' }}>{item.topic || item.keyword || '—'}</td>
         <td>{item.targetDate ? formatDate(item.targetDate) : '—'}</td>
         <td>
           <PlanItemStatusBadge status={item.status} />
@@ -479,8 +489,8 @@ function GenerateForItem({
   });
 
   return (
-    <div style={{ padding: '6px 2px' }}>
-      <div className="muted" style={{ marginBottom: 8 }}>
+    <div style={{ padding: 'var(--space-xs) 0' }}>
+      <div className="muted" style={{ marginBottom: 'var(--space-sm)' }}>
         Tạo <strong>{contentFormatLabel(item.format)}</strong> cho chủ đề “
         {item.topic || item.keyword || '—'}”. Cần nhập domain và persona để AI tạo nội dung.
       </div>
@@ -506,6 +516,7 @@ function GenerateForItem({
             onChange={(e) => setPersonaIds(e.target.value)}
             placeholder="persona-id-1, persona-id-2"
           />
+          <PersonaPicker value={personaIds} onChange={setPersonaIds} />
         </div>
       </div>
       <div className="modal-actions">

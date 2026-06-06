@@ -54,7 +54,7 @@ export function Login() {
       <form className="auth-card" onSubmit={onSubmit}>
         <h1>AutoTGC</h1>
         <p className="auth-sub">Đăng nhập vào tài khoản của bạn</p>
-        {error != null && <ErrorMessage error={error} />}
+        <div aria-live="polite">{error != null && <ErrorMessage error={error} />}</div>
         <div className="field">
           <label htmlFor="username">Tên đăng nhập</label>
           <input

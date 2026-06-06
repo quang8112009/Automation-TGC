@@ -307,6 +307,13 @@ const ICONS: Record<IconName, ReactNode> = {
   ),
 };
 
+/**
+ * Every defined icon name, derived from the `ICONS` map keys. Additive export
+ * (no behavior change) so callers and tests can enumerate the full icon set at
+ * runtime — `IconName` alone is a compile-time-only union.
+ */
+export const ICON_NAMES = Object.keys(ICONS) as IconName[];
+
 export interface IconProps {
   name: IconName;
   /** Rendered pixel size (width = height). Sidebar 18, inline/table/button 16. */
@@ -327,8 +334,15 @@ export function Icon({
   style,
   title,
 }: IconProps) {
+  // `ICONS` is typed `Record<IconName, ReactNode>`, so every valid IconName has
+  // a glyph and this lookup never yields `undefined` / throws.
   const content = ICONS[name];
-  const decorative = !title;
+  // A title only conveys meaning when it is a non-empty string. An empty (or
+  // absent) title means the icon is decorative, so the two a11y branches are
+  // kept mutually exclusive and deterministic:
+  //   labelled   → role="img" + aria-label === title + <title> child
+  //   decorative → aria-hidden=true, and NO aria-label / role / <title>
+  const labelled = typeof title === 'string' && title.length > 0;
   return (
     <svg
       className={className ? `icon ${className}` : 'icon'}
@@ -341,12 +355,12 @@ export function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
       style={style}
-      role={decorative ? undefined : 'img'}
-      aria-hidden={decorative ? true : undefined}
-      aria-label={title}
+      role={labelled ? 'img' : undefined}
+      aria-hidden={labelled ? undefined : true}
+      aria-label={labelled ? title : undefined}
       focusable={false}
     >
-      {title ? <title>{title}</title> : null}
+      {labelled ? <title>{title}</title> : null}
       {content}
     </svg>
   );

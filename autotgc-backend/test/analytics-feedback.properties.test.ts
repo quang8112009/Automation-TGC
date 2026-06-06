@@ -59,7 +59,7 @@ import type { AuthContext, ResourceTarget, Module, Action } from '../src/auth/rb
 import { JwtService } from '../src/auth/jwt';
 import type { Clock } from '../src/auth/jwt';
 import { InMemoryAlertDispatcher } from '../src/infra/alerts';
-import type { GeminiClient } from '../src/infra/gemini';
+import type { GeminiClient } from '../src/infra/aiTextClient';
 import type { AdapterRegistry } from '../src/platforms/registry';
 
 // --- shared constants --------------------------------------------------------

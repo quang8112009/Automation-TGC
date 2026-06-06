@@ -112,7 +112,7 @@ export function Knowledge() {
 
       <div className="card">
         {knowledgeQuery.isLoading ? (
-          <Loading label="Đang tải…" />
+          <Loading variant="table" rows={6} />
         ) : knowledgeQuery.error ? (
           <ErrorMessage error={knowledgeQuery.error} />
         ) : knowledgeQuery.data && knowledgeQuery.data.entries.length > 0 ? (
@@ -147,7 +147,16 @@ export function Knowledge() {
             </table>
           </div>
         ) : (
-          <Empty label="Chưa có nội dung tri thức nào." />
+          <Empty
+            label="Chưa có nội dung tri thức nào."
+            icon="book-open"
+            action={
+              <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+                <Icon name="plus" size={16} />
+                Nội dung mới
+              </button>
+            }
+          />
         )}
       </div>
 

@@ -75,7 +75,7 @@ export function Insights() {
       <div className="card">
         <h2 className="card-title">Pending Review</h2>
         {insightsQuery.isLoading ? (
-          <Loading />
+          <Loading variant="table" rows={6} label="Đang tải insight…" />
         ) : insightsQuery.error ? (
           <ErrorMessage error={insightsQuery.error} />
         ) : insightsQuery.data && insightsQuery.data.items.length > 0 ? (
@@ -120,7 +120,22 @@ export function Insights() {
             />
           </>
         ) : (
-          <Empty label="No insights pending review." />
+          <Empty
+            icon="lightbulb"
+            label="No insights pending review."
+            action={
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={analyzeMutation.isPending}
+                onClick={() => {
+                  setAnalyzeMsg(null);
+                  analyzeMutation.mutate();
+                }}
+              >
+                {analyzeMutation.isPending ? 'Analyzing…' : 'Run Analysis'}
+              </button>
+            }
+          />
         )}
       </div>
 
@@ -222,7 +237,7 @@ function InsightDetailModal({
 
           <h3>Supporting Records ({data.supportingRecords.length})</h3>
           {data.supportingRecords.length === 0 ? (
-            <div className="muted">No supporting records.</div>
+            <Empty icon="file-text" label="No supporting records." />
           ) : (
             <div className="table-wrap">
               <table className="data">
@@ -248,7 +263,7 @@ function InsightDetailModal({
             </div>
           )}
 
-          <div className="field" style={{ marginTop: 16 }}>
+          <div className="field" style={{ marginTop: 'var(--space-md)' }}>
             <label>Modify recommended change (JSON, optional)</label>
             <textarea
               value={modifyText}
@@ -257,7 +272,7 @@ function InsightDetailModal({
             />
             <button
               className="btn btn-sm"
-              style={{ marginTop: 6 }}
+              style={{ marginTop: 'var(--space-xs)' }}
               disabled={!modifyText || modifyMutation.isPending}
               onClick={() => modifyMutation.mutate()}
             >

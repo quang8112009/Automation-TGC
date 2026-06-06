@@ -16,3 +16,14 @@
 !.env.example
 
 .DS_Store
+
+# Local agent tooling / skills (not part of the product source)
+.agents/
+skill/
+skills-lock.json
+.kiro/agents/
+
+# One-off local utility scripts
+fix-mojibake.ps1
+fix_mojibake.py
+scan-mojibake.ps1

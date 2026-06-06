@@ -14,7 +14,10 @@ export type Action =
 export type Module =
   | 'strategy' | 'generation' | 'publishing' | 'analytics'
   | 'feedback' | 'lead_management' | 'settings' | 'dashboard'
-  | 'user_management'; // NEW: employee account management (ADMIN-only).
+  | 'user_management' // NEW: employee account management (ADMIN-only).
+  // NEW — fine-grained SALES configuration/reference surfaces, split out from
+  // the shared `settings`/`generation` modules to avoid privilege escalation.
+  | 'platform_tokens' | 'document_catalog' | 'knowledge_base';
 
 export interface ResourceTarget {
   module: Module;
@@ -33,6 +36,18 @@ export type AuthzDecision = { allowed: true } | { allowed: false; status: 403 };
 const WRITE_ACTIONS: ReadonlySet<Action> = new Set(['create', 'update', 'delete', 'status_update']);
 
 /**
+ * Allow-list of (module, action) pairs granted to SALES beyond the
+ * lead_management/dashboard branches. Splitting these into fine-grained modules
+ * (instead of flattening the shared `settings`/`generation` modules) keeps
+ * partner-write and privacy/GDPR-erasure ADMIN-only (Req 6 no-privilege-escalation).
+ */
+const SALES_CONFIG_GRANTS: Readonly<Record<string, ReadonlySet<Action>>> = {
+  platform_tokens: new Set(['read', 'update']),            // Req 1.1, 1.2
+  document_catalog: new Set(['read', 'update']),           // Req 1.4, 1.5
+  knowledge_base: new Set(['read', 'create', 'update']),   // Req 1.6–1.9 (deactivate = update active:false)
+};
+
+/**
  * Pure shared helper for any owner-scoped resource (lead/candidate/document/
  * report/stats). Returns true ONLY WHEN the owner matches the caller. When
  * `ownerUserId === undefined` (e.g. unassigned / not-found resource) this is
@@ -49,32 +64,35 @@ export function authorize(ctx: AuthContext, target: ResourceTarget): AuthzDecisi
     return { allowed: true };
   }
 
-  // SALES policy (Req 3.1–3.3, 3.6–3.9, 5.9).
+  // SALES policy (Req 1, 2, 3, 5, 6).
   if (ctx.role === 'SALES') {
+    // (1) Fine-grained configuration/reference surfaces — explicit allow-list (Req 1.1–1.9).
+    const granted = SALES_CONFIG_GRANTS[target.module];
+    if (granted) {
+      return granted.has(target.action) ? { allowed: true } : { allowed: false, status: 403 };
+    }
+
     if (target.module === 'lead_management') {
       // assigned-only; read + update + status_update permitted, but not delete.
-      if (target.action === 'delete') return { allowed: false, status: 403 }; // Req 3.2
+      if (target.action === 'delete') return { allowed: false, status: 403 }; // Req 2.5
       if (target.ownerUserId !== undefined && !isAssignedOwner(ctx.userId, target.ownerUserId)) {
-        return { allowed: false, status: 403 }; // Req 3.1 non-assigned owner
+        return { allowed: false, status: 403 }; // Req 2.3, 3.4 non-assigned owner
       }
       if (target.action === 'read' || target.action === 'status_update' || target.action === 'update') {
-        return { allowed: true }; // Req 3.3
+        return { allowed: true }; // Req 3.7
       }
-      return { allowed: false, status: 403 };
+      return { allowed: false, status: 403 }; // create → 403
     }
     if (target.module === 'dashboard') {
-      // company-wide stats are ADMIN-only (Req 3.6); writes denied (Req 3.8); other reads allowed (Req 3.7).
+      // company-wide stats are ADMIN-only (Req 6.4); writes denied (Req 6.3); other reads allowed (Req 6.6).
       if (target.action === 'company_stats') return { allowed: false, status: 403 };
       if (WRITE_ACTIONS.has(target.action)) return { allowed: false, status: 403 };
       return { allowed: true };
     }
-    if (target.module === 'user_management') {
-      // account management is ADMIN-only (Req 5.9).
-      return { allowed: false, status: 403 };
-    }
-    // strategy/generation/publishing/analytics/feedback/settings -> 403 (Req 3.9)
+    // settings/generation/strategy/publishing/analytics/feedback/user_management -> 403
+    // (Req 5.1, 5.3, 6.1, 6.2, 6.5) — deny-by-default.
     return { allowed: false, status: 403 };
   }
 
-  return { allowed: false, status: 403 };
+  return { allowed: false, status: 403 }; // unknown role → fail-closed deny.
 }

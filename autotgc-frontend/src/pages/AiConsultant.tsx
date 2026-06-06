@@ -39,11 +39,11 @@ export function AiConsultant() {
       </div>
 
       <div className="card">
-        <div className="muted" style={{ marginBottom: 12 }}>
+        <p className="muted">
           Đặt câu hỏi về xuất khẩu lao động (thị trường, diện visa, ngành nghề, quy trình, chi
           phí…). Câu trả lời được tổng hợp từ cơ sở tri thức của công ty; khi AI được cấu hình, nội
           dung sẽ do mô hình diễn đạt lại.
-        </div>
+        </p>
         <div className="field">
           <label>Câu hỏi</label>
           <textarea
@@ -65,8 +65,8 @@ export function AiConsultant() {
 
       {result != null && (
         <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <h2 className="card-title" style={{ margin: 0 }}>
+          <div className="inline-list" style={{ alignItems: 'center', marginBottom: 'var(--space-sm)' }}>
+            <h2 className="card-title" style={{ margin: 0, paddingBottom: 0, borderBottom: 'none' }}>
               Câu trả lời
             </h2>
             <AiGroundingBadge aiGenerated={result.aiGenerated} />
@@ -75,7 +75,7 @@ export function AiConsultant() {
             {result.answer}
           </pre>
 
-          <h3 style={{ marginTop: 18 }}>
+          <h3 style={{ marginTop: 'var(--space-lg)' }}>
             Nguồn tham khảo từ cơ sở tri thức ({result.sources.length})
           </h3>
           {result.sources.length === 0 ? (
@@ -92,7 +92,7 @@ export function AiConsultant() {
                       <span className="badge badge-gray">{s.category}</span>{' '}
                       <strong>{s.title}</strong>
                     </div>
-                    <div className="muted" style={{ marginTop: 4 }}>
+                    <div className="muted" style={{ marginTop: 'var(--space-xs)' }}>
                       {s.content}
                     </div>
                   </div>

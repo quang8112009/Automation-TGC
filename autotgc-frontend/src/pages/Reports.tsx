@@ -199,7 +199,7 @@ export function Reports() {
       {/* Table */}
       <div className="card">
         {reportsQuery.isLoading ? (
-          <Loading />
+          <Loading variant="table" rows={6} />
         ) : reportsQuery.error ? (
           <ErrorMessage error={reportsQuery.error} />
         ) : reportsQuery.data && reportsQuery.data.items.length > 0 ? (
@@ -238,7 +238,25 @@ export function Reports() {
             </table>
           </div>
         ) : (
-          <Empty label="Chưa có báo cáo nào." />
+          <Empty
+            label="Chưa có báo cáo nào."
+            icon="file-text"
+            action={
+              isAdmin ? (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    setActionError(null);
+                    setActionMsg(null);
+                    setShowGenerate(true);
+                  }}
+                >
+                  <Icon name="plus" size={16} />
+                  Tạo báo cáo
+                </button>
+              ) : undefined
+            }
+          />
         )}
       </div>
 
@@ -287,7 +305,7 @@ function GenerateReportModal({
   return (
     <Modal title="Tạo báo cáo" onClose={onClose}>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
-      <div className="muted" style={{ marginBottom: 12 }}>
+      <div className="muted" style={{ marginBottom: 'var(--space-md)' }}>
         Hệ thống tổng hợp dữ liệu của kỳ vừa kết thúc thành một báo cáo bản nháp. Báo cáo
         cần được phê duyệt trước khi xuất bản.
       </div>
@@ -434,12 +452,12 @@ function ReportContentView({ report }: { report: CompanyReportView }) {
 
   return (
     <>
-      <h3 style={{ marginTop: 18 }}>Tóm tắt điều hành</h3>
+      <h3 style={{ marginTop: 'var(--space-lg)' }}>Tóm tắt điều hành</h3>
       <pre className="code" style={{ whiteSpace: 'pre-wrap' }}>
         {content.executiveSummary || '—'}
       </pre>
 
-      <h3 style={{ marginTop: 18 }}>Hiệu suất nội dung</h3>
+      <h3 style={{ marginTop: 'var(--space-lg)' }}>Hiệu suất nội dung</h3>
       <dl className="kv">
         <dt>Số nội dung đã xuất bản</dt>
         <dd>{cp.publishedCount}</dd>
@@ -451,7 +469,7 @@ function ReportContentView({ report }: { report: CompanyReportView }) {
         <dd>{formatRate(cp.avgCtaClickRate)}</dd>
       </dl>
 
-      <h3 style={{ marginTop: 18 }}>Phễu tuyển dụng theo thị trường</h3>
+      <h3 style={{ marginTop: 'var(--space-lg)' }}>Phễu tuyển dụng theo thị trường</h3>
       {content.recruitmentFunnelByMarket.length === 0 ? (
         <div className="muted">Chưa đủ dữ liệu.</div>
       ) : (
@@ -483,7 +501,7 @@ function ReportContentView({ report }: { report: CompanyReportView }) {
         </div>
       )}
 
-      <h3 style={{ marginTop: 18 }}>Lead theo nguồn</h3>
+      <h3 style={{ marginTop: 'var(--space-lg)' }}>Lead theo nguồn</h3>
       {content.leadsBySource.length === 0 ? (
         <div className="muted">Chưa đủ dữ liệu.</div>
       ) : (
@@ -496,7 +514,7 @@ function ReportContentView({ report }: { report: CompanyReportView }) {
         </div>
       )}
 
-      <h3 style={{ marginTop: 18 }}>Điểm nổi bật</h3>
+      <h3 style={{ marginTop: 'var(--space-lg)' }}>Điểm nổi bật</h3>
       {content.highlights.length === 0 ? (
         <div className="muted">Không có điểm nổi bật.</div>
       ) : (
@@ -507,7 +525,7 @@ function ReportContentView({ report }: { report: CompanyReportView }) {
         </ul>
       )}
 
-      <h3 style={{ marginTop: 18 }}>Khuyến nghị</h3>
+      <h3 style={{ marginTop: 'var(--space-lg)' }}>Khuyến nghị</h3>
       {content.recommendations.length === 0 ? (
         <div className="muted">Chưa đủ dữ liệu để đưa ra khuyến nghị.</div>
       ) : (

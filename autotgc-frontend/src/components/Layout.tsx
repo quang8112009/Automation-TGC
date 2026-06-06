@@ -15,22 +15,8 @@ import { useRealtime } from '../realtime/RealtimeContext';
 import type { ConnectionStatus } from '../realtime/RealtimeContext';
 import { NotificationsBell } from './NotificationsBell';
 import { Icon } from './Icon';
-import type { IconName } from './Icon';
-import type { Role } from '../lib/types';
-
-interface NavItem {
-  to: string;
-  label: string;
-  icon: IconName;
-  /** When set, only these roles see the item. */
-  roles?: Role[];
-}
-
-interface NavGroup {
-  /** Vietnamese section heading. */
-  title: string;
-  items: NavItem[];
-}
+import { filterNavGroups } from '../lib/nav';
+import type { NavGroup } from '../lib/nav';
 
 /**
  * Grouped navigation. The flat route list is unchanged (same `to`/`label`/role
@@ -53,6 +39,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/follow-ups', label: 'Nuôi dưỡng 1-1', icon: 'bell' },
       { to: '/job-orders', label: 'Đơn hàng', icon: 'clipboard-list' },
       { to: '/candidates', label: 'Ứng viên', icon: 'users' },
+      { to: '/interview-prep', label: 'Luyện phỏng vấn', icon: 'graduation-cap' },
       { to: '/partners', label: 'Đối tác & Điểm đến', icon: 'compass', roles: ['ADMIN'] },
       { to: '/analytics', label: 'Phân tích tuyển dụng', icon: 'bar-chart-3' },
     ],
@@ -138,12 +125,7 @@ export function Layout() {
     navigate('/login', { replace: true });
   }
 
-  const visibleGroups = NAV_GROUPS.map((group) => ({
-    ...group,
-    items: group.items.filter(
-      (item) => !item.roles || (role && item.roles.includes(role)),
-    ),
-  })).filter((group) => group.items.length > 0);
+  const visibleGroups = filterNavGroups(NAV_GROUPS, role);
 
   const sidebarClass = [
     'sidebar',
@@ -237,7 +219,7 @@ export function Layout() {
           </button>
         </header>
         <main className="content">
-          <Suspense fallback={<div className="skeleton-stack" role="status" aria-label="Đang tải trang…"><span className="skeleton" style={{height:16,width:'40%'}} /><span className="skeleton skeleton--row" /><span className="skeleton skeleton--row" /><span className="skeleton skeleton--row" /></div>}>
+          <Suspense fallback={<div className="skeleton-stack" role="status" aria-label="Đang tải trang…"><span className="skeleton skeleton--title" /><span className="skeleton skeleton--row" /><span className="skeleton skeleton--row" /><span className="skeleton skeleton--row" /></div>}>
             <Outlet />
           </Suspense>
         </main>

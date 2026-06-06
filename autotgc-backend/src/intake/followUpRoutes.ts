@@ -2,11 +2,19 @@
  * Follow-up (nurture) route registration (Feature 3). Thin Fastify layer behind
  * requireAuth + rbacGuard(lead_management). Reads are allowed for SALES+ADMIN;
  * scan/send/cancel are writes (lead_management/update). Additive registrar.
+ *
+ * Assigned-only scoping (sales-access-restrictions, Req 3.5/3.6): the GET
+ * /api/v1/follow-ups list read passes the caller (getAuth(request)) as the
+ * actor down to FollowUpService.list, which restricts SALES to follow-up tasks
+ * whose candidate they are the Assigned_Owner of (tasks without an owned
+ * candidate are excluded, fail-closed). ADMIN sees all tasks. The scan/send-due
+ * /cancel routes are background/ADMIN-style writes guarded by
+ * lead_management/update and are intentionally not per-candidate scoped here.
  */
 import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../auth/jwt';
-import { requireAuth, rbacGuard } from '../http/authMiddleware';
+import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
 import { FollowUpService } from './followUpService';
 import type { ChannelSender } from './intakeService';
 
@@ -39,7 +47,7 @@ export async function registerFollowUpRoutes(app: FastifyInstance, deps: FollowU
     { preHandler: [auth, readGuard] },
     async (request, reply) => {
       const q = (request.query ?? {}) as Record<string, unknown>;
-      const result = await service.list(asString(q.status), asInt(q.page, 1), asInt(q.limit, 20));
+      const result = await service.list(asString(q.status), asInt(q.page, 1), asInt(q.limit, 20), getAuth(request));
       return reply.code(200).send(result);
     },
   );

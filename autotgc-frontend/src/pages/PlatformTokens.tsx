@@ -42,7 +42,7 @@ export function PlatformTokens() {
         </button>
       </div>
 
-      <p className="muted" style={{ marginBottom: 12 }}>
+      <p className="muted" style={{ marginBottom: 'var(--space-md)' }}>
         Token values are stored in the server-side secret store and never exposed by the
         API. This view shows metadata and validity only.
       </p>
@@ -51,7 +51,7 @@ export function PlatformTokens() {
 
       <div className="card">
         {tokensQuery.isLoading ? (
-          <Loading />
+          <Loading variant="table" rows={4} label="Đang tải platform tokens…" />
         ) : tokensQuery.error ? (
           <ErrorMessage error={tokensQuery.error} />
         ) : tokensQuery.data && tokensQuery.data.tokens.length > 0 ? (
@@ -90,7 +90,7 @@ export function PlatformTokens() {
             </table>
           </div>
         ) : (
-          <Empty label="No platform tokens registered." />
+          <Empty icon="key" label="No platform tokens registered." />
         )}
       </div>
     </div>

@@ -186,10 +186,11 @@ export function Strategy() {
         <h2 className="card-title">Personas</h2>
         <p className="muted">
           All saved personas across domains. Newly created or edited personas appear here
-          right away.
+          right away. Sao chép <strong>Persona ID</strong> để dán vào Xưởng nội dung / Kế hoạch nội
+          dung khi tạo nội dung.
         </p>
         {personasQuery.isLoading ? (
-          <Loading />
+          <Loading variant="table" rows={4} />
         ) : personasQuery.error ? (
           <ErrorMessage error={personasQuery.error} />
         ) : (
@@ -205,13 +206,32 @@ export function Strategy() {
                 new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
             );
             if (personas.length === 0) {
-              return <div className="muted">No personas yet. Create one to get started.</div>;
+              return (
+                <Empty
+                  label="No personas yet. Create one to get started."
+                  icon="users"
+                  action={
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        setEditing(null);
+                        setReco(null);
+                        setShowForm(true);
+                      }}
+                    >
+                      <Icon name="plus" size={16} />
+                      New Persona
+                    </button>
+                  }
+                />
+              );
             }
             return (
               <div className="table-wrap">
                 <table className="data">
                   <thead>
                     <tr>
+                      <th>Persona ID</th>
                       <th>Name</th>
                       <th>Age</th>
                       <th>Tone</th>
@@ -222,6 +242,9 @@ export function Strategy() {
                   <tbody>
                     {personas.map((p) => (
                       <tr key={p.id}>
+                        <td>
+                          <PersonaIdCell id={p.id} />
+                        </td>
                         <td>{p.personaName}</td>
                         <td>{p.age}</td>
                         <td>{p.toneOfVoice}</td>
@@ -264,6 +287,56 @@ export function Strategy() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Persona ID cell: shows a shortened, monospaced id with a copy button so the
+ * value can be pasted into the Content Studio / Content Plans "Persona IDs"
+ * field. Copies the FULL id (not the truncated display) to the clipboard.
+ */
+function PersonaIdCell({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  const short = id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(id);
+    } catch {
+      // Fallback for non-secure contexts where the Clipboard API is unavailable.
+      const ta = document.createElement('textarea');
+      ta.value = id;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        /* ignore */
+      }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+      <code style={{ fontSize: 'var(--fs-xs)' }} title={id}>
+        {short}
+      </code>
+      <button
+        type="button"
+        className="btn btn-sm"
+        onClick={copy}
+        title="Sao chép Persona ID"
+        aria-label="Sao chép Persona ID"
+      >
+        <Icon name={copied ? 'check' : 'clipboard-list'} size={14} />
+        {copied ? ' Đã chép' : ''}
+      </button>
+    </span>
   );
 }
 
@@ -426,7 +499,7 @@ function CalendarSection() {
                     <li key={d.id}>
                       <span
                         className="conn-dot"
-                        style={{ background: d.color, display: 'inline-block', marginRight: 6 }}
+                        style={{ background: d.color, display: 'inline-block', marginRight: 'var(--space-xs)' }}
                       />
                       {d.title} <StatusBadge status={d.status} />
                     </li>
@@ -716,19 +789,19 @@ function ScheduleBoardSection() {
         onDrop={(e) => onItemDrop(e, item.id)}
         className="sb-card"
         style={{
-          border: '1px solid var(--border, #ddd)',
-          borderRadius: 8,
-          padding: '8px 10px',
-          marginBottom: 8,
-          background: 'var(--surface, #fff)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          padding: 'var(--space-sm)',
+          marginBottom: 'var(--space-sm)',
+          background: 'var(--surface)',
           cursor: 'grab',
         }}
         title="Kéo sang ngày khác để đổi lịch, hoặc thả lên một mục khác để sắp thứ tự"
       >
-        <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 600 }}>
+        <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)' }}>
           {item.topic || item.keyword || '—'}
         </div>
-        <div className="muted" style={{ fontSize: 'var(--fs-xs)', margin: '2px 0 6px' }}>
+        <div className="muted" style={{ fontSize: 'var(--fs-xs)', margin: 'var(--space-xs) 0' }}>
           {channelLabel(item.channel)} · {contentFormatLabel(item.format)}
         </div>
         <span className={`badge ${badge}`}>{planItemStatusLabel(item.status)}</span>
@@ -776,20 +849,20 @@ function ScheduleBoardSection() {
       ) : plan && items.length === 0 ? (
         <Empty label="Kế hoạch này chưa có mục nội dung." />
       ) : plan ? (
-        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 'var(--space-md)', overflowX: 'auto', paddingBottom: 'var(--space-sm)' }}>
           {/* Cột "Chưa xếp ngày" cho các mục không có targetDate. */}
           <div
             onDragOver={allowDrop}
             className="sb-col"
             style={{ minWidth: 200, flex: '0 0 200px' }}
           >
-            <h3 style={{ fontSize: 'var(--fs-sm)', margin: '0 0 8px' }}>Chưa xếp ngày</h3>
+            <h3 style={{ fontSize: 'var(--fs-sm)', margin: '0 0 var(--space-sm)' }}>Chưa xếp ngày</h3>
             <div
               onDragOver={allowDrop}
-              style={{ minHeight: 60, padding: 4, borderRadius: 8, background: 'var(--surface-sunken, #f6f6f6)' }}
+              style={{ minHeight: 60, padding: 'var(--space-xs)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-sunken)' }}
             >
               {unscheduled.length === 0 ? (
-                <div className="muted" style={{ fontSize: 'var(--fs-xs)', padding: 4 }}>
+                <div className="muted" style={{ fontSize: 'var(--fs-xs)', padding: 'var(--space-xs)' }}>
                   Không có mục.
                 </div>
               ) : (
@@ -802,19 +875,19 @@ function ScheduleBoardSection() {
             const dayItems = items.filter((it) => itemDayKey(it) === key);
             return (
               <div key={key} className="sb-col" style={{ minWidth: 200, flex: '0 0 200px' }}>
-                <h3 style={{ fontSize: 'var(--fs-sm)', margin: '0 0 8px' }}>{dayLabel(key)}</h3>
+                <h3 style={{ fontSize: 'var(--fs-sm)', margin: '0 0 var(--space-sm)' }}>{dayLabel(key)}</h3>
                 <div
                   onDragOver={allowDrop}
                   onDrop={(e) => onDayDrop(e, key)}
                   style={{
                     minHeight: 60,
-                    padding: 4,
-                    borderRadius: 8,
-                    background: 'var(--surface-sunken, #f6f6f6)',
+                    padding: 'var(--space-xs)',
+                    borderRadius: 'var(--radius-lg)',
+                    background: 'var(--surface-sunken)',
                   }}
                 >
                   {dayItems.length === 0 ? (
-                    <div className="muted" style={{ fontSize: 'var(--fs-xs)', padding: 4 }}>
+                    <div className="muted" style={{ fontSize: 'var(--fs-xs)', padding: 'var(--space-xs)' }}>
                       Thả vào đây để xếp ngày {dayLabel(key)}.
                     </div>
                   ) : (

@@ -6,12 +6,13 @@
  * and ADMIN policies apply without changing the RBAC policy table:
  *   - Candidates   -> module 'lead_management' (ADMIN full; SALES assigned-only
  *                     read/update/status_update; SALES cannot delete).
- *   - Job orders   -> module 'lead_management' create/update/delete (ADMIN-managed;
- *                     SALES is denied create/delete but may read).
+ *   - Job orders   -> module 'lead_management' (ADMIN full; SALES assigned-only:
+ *                     denied create/delete, may read/update only the orders
+ *                     assigned to them via jobOrder.assignedTo).
  *
- * For candidate :id routes the RBAC target resolves ownerUserId from the
- * candidate's assignedTo (mirrors leadTargetById in routes/index.ts) so the
- * SALES assigned-only policy is enforced. Uses the /api/v1 gateway prefix.
+ * For candidate and job-order :id routes the RBAC target resolves ownerUserId
+ * from the resource's assignedTo (mirrors leadTargetById in routes/index.ts) so
+ * the SALES assigned-only policy is enforced. Uses the /api/v1 gateway prefix.
  *
  * This file does NOT modify existing files; it exports a registrar that the
  * application wires in additively.
@@ -22,6 +23,7 @@ import type { JwtService } from '../auth/jwt';
 import type { EventBus } from '../infra/events';
 import type { OversightService } from '../oversight/oversightService';
 import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import type { Action } from '../auth/rbac';
 import { ValidationError } from '../infra/errors';
 import { JobOrderService } from './jobOrderService';
@@ -42,6 +44,12 @@ export interface RecruitmentRouteDeps {
   /** Central oversight emit point; when present, supervised candidate stage
    * changes fan out one ActivityLog + N notifications. */
   oversight?: OversightService;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3). When present it is threaded into the lead_management / job-order /
+   * candidate / analytics rbacGuards so each 403 appends one `AUTHZ_DENIED`
+   * record. Optional so existing wiring keeps compiling and behaving identically
+   * when omitted. */
+  auditor?: RbacAuditor;
 }
 
 interface IdParams {
@@ -74,10 +82,16 @@ export async function registerRecruitmentRoutes(
   const jobOrderService = new JobOrderService(prisma);
   const candidateService = new CandidateService(prisma, deps.eventBus, deps.oversight);
   const candidateAnalytics = new CandidateAnalyticsService(prisma);
+  const auditor = deps.auditor;
 
   // Collection-level RBAC for the lead_management module.
   const collectionGuard = (action: Action) =>
-    rbacGuard(() => ({ module: 'lead_management', action }));
+    rbacGuard(() => ({ module: 'lead_management', action }), auditor);
+
+  // Recruitment analytics is ADMIN-only: guarding on the 'analytics' module
+  // (read) means SALES is denied (403) at the preHandler stage before any
+  // analytics query runs, while ADMIN remains allowed everywhere.
+  const analyticsGuard = rbacGuard(() => ({ module: 'analytics', action: 'read' }), auditor);
 
   // For candidate :id routes, resolve ownerUserId from the candidate's
   // assignedTo so the SALES assigned-only policy can be enforced by authorize().
@@ -93,9 +107,30 @@ export async function registerRecruitmentRoutes(
         action,
         ownerUserId: candidate?.assignedTo ?? undefined,
       };
-    });
+    }, auditor);
 
-  // ---- Job orders (ADMIN-managed; SALES read-only) ---------------------------
+  // For job-order :id routes, resolve ownerUserId from the order's assignedTo
+  // so the SALES assigned-only policy is enforced by authorize() (mirrors
+  // candidateTargetById). Orders with assignedTo = null resolve to undefined,
+  // which never matches a SALES caller (fail-closed).
+  const jobOrderTargetById = (action: Action) =>
+    rbacGuard(async (request: FastifyRequest) => {
+      const { id } = request.params as IdParams;
+      const order = await prisma.jobOrder.findUnique({
+        where: { id },
+        select: { assignedTo: true },
+      });
+      return {
+        module: 'lead_management' as const,
+        action,
+        ownerUserId: order?.assignedTo ?? undefined,
+      };
+    }, auditor);
+
+  // ---- Job orders (ADMIN-managed; SALES assigned-only) -----------------------
+  // create/delete remain ADMIN-only (collectionGuard); list is collectionGuard
+  // with service-layer assigned-only scoping; :id routes resolve ownership via
+  // jobOrderTargetById so SALES can only read/update orders assigned to them.
   app.post(
     '/api/v1/job-orders',
     { preHandler: [auth, collectionGuard('create')] },
@@ -119,6 +154,7 @@ export async function registerRecruitmentRoutes(
         },
         asInt(q.page, 1),
         asInt(q.limit, 20),
+        getAuth(request),
       );
       return reply.code(200).send(result);
     },
@@ -126,17 +162,17 @@ export async function registerRecruitmentRoutes(
 
   app.get(
     '/api/v1/job-orders/:id',
-    { preHandler: [auth, collectionGuard('read')] },
+    { preHandler: [auth, jobOrderTargetById('read')] },
     async (request, reply) => {
       const { id } = request.params as IdParams;
-      const order = await jobOrderService.get(id);
+      const order = await jobOrderService.get(id, getAuth(request));
       return reply.code(200).send(order);
     },
   );
 
   app.put(
     '/api/v1/job-orders/:id',
-    { preHandler: [auth, collectionGuard('update')] },
+    { preHandler: [auth, jobOrderTargetById('update')] },
     async (request, reply) => {
       const { id } = request.params as IdParams;
       const order = await jobOrderService.update(id, (request.body ?? {}) as UpdateJobOrderInput);
@@ -146,7 +182,7 @@ export async function registerRecruitmentRoutes(
 
   app.post(
     '/api/v1/job-orders/:id/close',
-    { preHandler: [auth, collectionGuard('update')] },
+    { preHandler: [auth, jobOrderTargetById('update')] },
     async (request, reply) => {
       const { id } = request.params as IdParams;
       const order = await jobOrderService.close(id);
@@ -227,10 +263,12 @@ export async function registerRecruitmentRoutes(
     },
   );
 
-  // Candidate-level conversion analytics (read; SALES assigned-only scoping).
+  // Candidate-level conversion analytics (ADMIN-only; SALES -> 403). Guarded on
+  // the 'analytics' module so the deny happens at the preHandler stage before
+  // any analytics query runs.
   app.get(
     '/api/v1/candidates/analytics/funnel',
-    { preHandler: [auth, collectionGuard('read')] },
+    { preHandler: [auth, analyticsGuard] },
     async (request, reply) => {
       const actor = getAuth(request);
       const q = (request.query ?? {}) as Record<string, unknown>;
@@ -249,7 +287,7 @@ export async function registerRecruitmentRoutes(
 
   app.get(
     '/api/v1/candidates/analytics/by-market',
-    { preHandler: [auth, collectionGuard('read')] },
+    { preHandler: [auth, analyticsGuard] },
     async (request, reply) => {
       const actor = getAuth(request);
       const q = (request.query ?? {}) as Record<string, unknown>;
@@ -260,7 +298,7 @@ export async function registerRecruitmentRoutes(
 
   app.get(
     '/api/v1/candidates/analytics/by-source',
-    { preHandler: [auth, collectionGuard('read')] },
+    { preHandler: [auth, analyticsGuard] },
     async (request, reply) => {
       const actor = getAuth(request);
       const q = (request.query ?? {}) as Record<string, unknown>;
@@ -271,7 +309,7 @@ export async function registerRecruitmentRoutes(
 
   app.get(
     '/api/v1/candidates/analytics/conversion-by-job-order',
-    { preHandler: [auth, collectionGuard('read')] },
+    { preHandler: [auth, analyticsGuard] },
     async (request, reply) => {
       const actor = getAuth(request);
       const q = (request.query ?? {}) as Record<string, unknown>;

@@ -45,6 +45,15 @@ export interface UpdateLeadInput {
 
 export type StatGroupBy = 'source' | 'platform' | 'date';
 
+/** True for a Prisma unique-constraint (P2002) error, without importing runtime types. */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as { code?: unknown }).code === 'P2002'
+  );
+}
+
 export class LeadService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -99,7 +108,11 @@ export class LeadService {
     return lead;
   }
 
-  async createFromWebhook(attribution: Attribution, fields: CreateLeadInput): Promise<Lead> {
+  async createFromWebhook(
+    attribution: Attribution,
+    fields: CreateLeadInput,
+    dedupKey?: string,
+  ): Promise<Lead> {
     const merged: CreateLeadInput = {
       ...fields,
       source: attribution.source,
@@ -110,23 +123,44 @@ export class LeadService {
     if (!validation.ok) {
       throw new ValidationError(validation.message, validation.code);
     }
-    const lead = await this.prisma.lead.create({
-      data: {
-        name: fields.name ?? null,
-        phone: fields.phone ?? null,
-        email: fields.email ?? null,
-        source: attribution.source,
-        platform: attribution.platform,
-        utmSource: fields.utmSource ?? null,
-        utmMedium: fields.utmMedium ?? null,
-        utmCampaign: fields.utmCampaign ?? null,
-        contentPostId: attribution.contentPostId,
-        domainCategory: fields.domainCategory ?? null,
-        contentTopic: fields.contentTopic ?? null,
-        status: 'NEW',
-        unattributed: attribution.unattributed,
-      },
-    });
+
+    // Idempotency (security): when a per-delivery dedupKey is supplied, a
+    // replayed webhook resolves to the SAME Lead instead of creating a duplicate.
+    // The unique index on `dedupKey` makes this race-safe; on a concurrent
+    // duplicate we read back the existing row rather than throwing.
+    if (dedupKey) {
+      const existing = await this.prisma.lead.findUnique({ where: { dedupKey } });
+      if (existing) return existing;
+    }
+
+    const data = {
+      name: fields.name ?? null,
+      phone: fields.phone ?? null,
+      email: fields.email ?? null,
+      source: attribution.source,
+      platform: attribution.platform,
+      utmSource: fields.utmSource ?? null,
+      utmMedium: fields.utmMedium ?? null,
+      utmCampaign: fields.utmCampaign ?? null,
+      contentPostId: attribution.contentPostId,
+      domainCategory: fields.domainCategory ?? null,
+      contentTopic: fields.contentTopic ?? null,
+      status: 'NEW' as const,
+      unattributed: attribution.unattributed,
+      dedupKey: dedupKey ?? null,
+    };
+
+    let lead: Lead;
+    try {
+      lead = await this.prisma.lead.create({ data });
+    } catch (err) {
+      // A racing duplicate delivery lost the insert: return the winner's row.
+      if (dedupKey && isUniqueViolation(err)) {
+        const existing = await this.prisma.lead.findUnique({ where: { dedupKey } });
+        if (existing) return existing;
+      }
+      throw err;
+    }
     await this.emit('created', lead);
     return lead;
   }

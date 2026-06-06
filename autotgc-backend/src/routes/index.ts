@@ -20,6 +20,7 @@ import {
 } from '../leads/validation';
 import type { Attribution, CreateLeadInput } from '../leads/validation';
 import { verifySignature } from '../infra/hmac';
+import { recordWebhookDelivery, fingerprintBody } from '../infra/webhookReplay';
 import { isDataStale, isUpcoming } from '../dashboard/helpers';
 import { buildApprovalQueue } from '../dashboard/assembler';
 import { composeOverview, safeRate } from '../dashboard/adminOverview';
@@ -33,6 +34,7 @@ import type { OversightService } from '../oversight/oversightService';
 import {
   UnauthorizedError,
   ValidationError,
+  ConflictError,
 } from '../infra/errors';
 import {
   getAuth,
@@ -98,6 +100,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     config.lockoutThreshold,
     config.accessTokenTtlHours,
     config.refreshTokenTtlDays,
+    config.lockoutCooldownMinutes,
   );
   const leadService = new LeadService(prisma, deps.eventBus, deps.oversight);
   const noteAnalysisService = new NoteAnalysisService(prisma);
@@ -309,6 +312,25 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
         throw new ValidationError('Webhook payload is not valid JSON', 'INVALID_JSON');
       }
 
+      // Replay protection (security): even with a valid HMAC, a captured delivery
+      // must not be processed twice. Prefer a provider-supplied delivery/event id
+      // (Meta sends it on the entry; generic senders may pass `deliveryId`/`id`);
+      // otherwise fall back to a SHA-256 of the raw body. A repeat is a 409.
+      const providerDeliveryId =
+        asString(payload.deliveryId) ??
+        asString(payload.delivery_id) ??
+        asString((payload.entry as Array<{ id?: unknown }> | undefined)?.[0]?.id) ??
+        asString(payload.id);
+      const fresh = await recordWebhookDelivery(prisma, {
+        source: `lead:${platform}`,
+        deliveryId: providerDeliveryId,
+        rawBody: raw,
+        signature,
+      });
+      if (!fresh) {
+        throw new ConflictError('Duplicate webhook delivery', 'WEBHOOK_REPLAY');
+      }
+
       const contentPostId =
         asString(payload.contentPostId) ?? asString(payload.content_post_id);
       const utmSource = asString(payload.utmSource) ?? asString(payload.utm_source);
@@ -329,7 +351,11 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
         contentTopic: asString(payload.contentTopic) ?? asString(payload.content_topic) ?? null,
       };
 
-      const lead = await leadService.createFromWebhook(attribution, fields);
+      // The dedup key is the same identity used for replay detection; it makes
+      // the Lead write itself idempotent (unique index) as a second line of
+      // defense even if two deliveries race past the ledger check.
+      const dedupKey = `lead:${platform}:${providerDeliveryId ?? fingerprintBody(raw)}`;
+      const lead = await leadService.createFromWebhook(attribution, fields, dedupKey);
       return reply.code(201).send(lead);
     };
 

@@ -20,7 +20,7 @@ import {
 import type { CandidateStage } from '../api/analytics';
 import { BarChart, DonutChart, FunnelChart } from '../components/charts';
 import type { FunnelStage } from '../components/charts';
-import { ErrorMessage, Loading, StatCard } from '../components/ui';
+import { ErrorMessage, Loading, StatCard, Empty } from '../components/ui';
 import { useRealtime } from '../realtime/RealtimeContext';
 import {
   CANDIDATE_STAGE_LABELS,
@@ -151,19 +151,19 @@ export function Analytics() {
             Đặt lại
           </button>
         </div>
-        <div className="muted" style={{ fontSize: 12 }}>
+        <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
           Mẹo: để trống ngày để xem toàn bộ. Tài khoản SALES chỉ thấy ứng viên được phân công.
         </div>
       </div>
 
       {/* ---- KPI tiles ---- */}
       {funnelQ.isLoading ? (
-        <Loading label="Đang tải phễu…" />
+        <Loading variant="kpi" cols={4} />
       ) : funnelQ.error ? (
         <ErrorMessage error={funnelQ.error} />
       ) : funnel ? (
         <>
-          <div className="grid grid-4" style={{ marginBottom: 18 }}>
+          <div className="grid grid-4" style={{ marginBottom: 'var(--space-md)' }}>
             <StatCard label="Tổng ứng viên" count={funnel.total} />
             <StatCard label="Tỉ lệ đã tư vấn" count={funnel.rates.contactedRate} suffix="%" />
             <StatCard label="Tỉ lệ phỏng vấn" count={funnel.rates.interviewRate} suffix="%" />
@@ -189,13 +189,13 @@ export function Analytics() {
             {/* Conversion donut */}
             <div className="card">
               <h2 className="card-title">Chuyển đổi xuất cảnh</h2>
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-sm) 0' }}>
                 <DonutChart
                   percent={funnel.rates.departedRate}
                   caption={`${funnel.counts.DEPARTED ?? 0} / ${funnel.total} ứng viên đã xuất cảnh`}
                 />
               </div>
-              <div className="muted" style={{ fontSize: 12, textAlign: 'center' }}>
+              <div className="muted" style={{ fontSize: 'var(--fs-xs)', textAlign: 'center' }}>
                 Tỉ lệ ứng viên đi đến trạng thái “Đã xuất cảnh”.
               </div>
             </div>
@@ -242,11 +242,11 @@ export function Analytics() {
       <div className="card">
         <h2 className="card-title">Chuyển đổi theo đơn hàng (đơn → xuất cảnh)</h2>
         {byJobOrderQ.isLoading ? (
-          <Loading label="Đang tải…" />
+          <Loading variant="table" rows={5} />
         ) : byJobOrderQ.error ? (
           <ErrorMessage error={byJobOrderQ.error} />
         ) : (byJobOrderQ.data?.buckets ?? []).length === 0 ? (
-          <div className="muted">Chưa có ứng viên nào được ghép đơn trong khoảng này.</div>
+          <Empty icon="bar-chart-3" label="Chưa có ứng viên nào được ghép đơn trong khoảng này." />
         ) : (
           <div className="table-wrap">
             <table className="data">

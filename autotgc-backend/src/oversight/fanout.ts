@@ -38,6 +38,12 @@ const ACTION_LABELS: Record<ActivityAction, string> = {
   DOCUMENT_VERIFIED: 'đã xác minh giấy tờ',
   CANDIDATE_STAGE_CHANGED: 'đã đổi giai đoạn ứng viên',
   LEAD_STATUS_CHANGED: 'đã đổi trạng thái lead',
+  PLATFORM_TOKEN_REFRESHED: 'đã làm mới platform token',
+  DOCUMENT_CATALOG_UPDATED: 'đã cập nhật danh mục giấy tờ',
+  KNOWLEDGE_CREATED: 'đã tạo mục kiến thức',
+  KNOWLEDGE_UPDATED: 'đã cập nhật mục kiến thức',
+  KNOWLEDGE_DEACTIVATED: 'đã vô hiệu hóa mục kiến thức',
+  AUTHZ_DENIED: 'bị từ chối phân quyền',
 };
 
 /**

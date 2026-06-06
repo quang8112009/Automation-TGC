@@ -37,6 +37,12 @@ export interface FormatMeta {
   ctasRequired: boolean;
   /** Vietnamese length / shape hint surfaced to the UI and embedded in prompts. */
   lengthHint: string;
+  /**
+   * Upper bound on output tokens for this format, sized to its length hint. Caps
+   * worst-case generation latency: short formats finish fast instead of letting
+   * the model ramble. Generous enough not to truncate a well-formed response.
+   */
+  maxTokens: number;
 }
 
 /**
@@ -49,35 +55,42 @@ export const FORMAT_META: Record<ContentFormat, FormatMeta> = {
     label: 'Nội dung tổng quát',
     ctasRequired: true,
     lengthHint: 'Độ dài linh hoạt theo mục tiêu',
+    maxTokens: 1500,
   },
   SEO_ARTICLE: {
     label: 'Bài viết chuẩn SEO',
     ctasRequired: true,
     lengthHint: '800–1500 từ, có thẻ H2/H3 và meta description',
+    maxTokens: 3500,
   },
   FANPAGE_CAPTION: {
     label: 'Caption Fanpage',
     ctasRequired: true,
     lengthHint: 'Tối đa 600 ký tự, kèm hashtag',
+    maxTokens: 600,
   },
   VIDEO_SCRIPT: {
     label: 'Kịch bản video ngắn',
     ctasRequired: true,
     lengthHint: '30–60 giây: hook + cảnh quay + voiceover + chữ trên màn hình',
+    maxTokens: 1200,
   },
   EMAIL: {
     label: 'Email chăm sóc',
     ctasRequired: true,
     lengthHint: 'Tiêu đề (subject) + thân email ngắn gọn',
+    maxTokens: 900,
   },
   CARE_MESSAGE: {
     label: 'Tin nhắn chăm sóc',
     ctasRequired: false,
     lengthHint: 'Ngắn gọn, giọng Zalo/SMS',
+    maxTokens: 400,
   },
   CHATBOT_FAQ: {
     label: 'Kịch bản chatbot FAQ',
     ctasRequired: false,
     lengthHint: 'Các cặp Hỏi–Đáp ngắn gọn',
+    maxTokens: 1200,
   },
 };

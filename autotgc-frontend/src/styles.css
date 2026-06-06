@@ -1,42 +1,49 @@
 /* =====================================================================
-   AutoTGC — Thanh Giang | "Academia" Redesign (v2)
-   Prestige-university editorial aesthetic. Single global stylesheet driven
-   entirely by the :root tokens below (Academic Navy / Oxford Crimson /
-   Prestige Gold on warm ivory paper; Crimson Pro display + Inter body +
-   IBM Plex Mono numerals). Per design-system MASTER + STYLE_BRIEF.
-   Class NAMES the ~22 pages depend on are PRESERVED (restyled, never renamed).
+   AutoTGC — Thanh Giang | "Dark Editorial" Redesign (v3, Option B)
+   Premium dark-studio editorial aesthetic. Single global stylesheet driven
+   entirely by the :root tokens below: a near-black canvas, off-white ink,
+   oversized Space Grotesk display headings with an italic Playfair-serif
+   accent word, amber (Prestige Gold) as the locked single accent, pill
+   buttons, and rounded dark "bento" cards with hairline borders + generous
+   spacing. Inter body + IBM Plex Mono numerals.
+   Class NAMES the ~22 pages depend on are PRESERVED (restyled, never renamed);
+   the warm-stone ramp is INVERTED in value but keeps every name so meaning is
+   preserved on dark. Token NAMES never change — only their values do.
    ===================================================================== */
 
 :root {
   /* ============================================================ BRAND
-     (MASTER — Academia. DO NOT change these hexes.) */
-  --color-primary:        #0F1E3D;  /* Academic Navy — sidebar spine, headings, structure */
-  --color-primary-700:    #16294F;  /* darker/hover navy */
-  --color-primary-hover:  #16294F;  /* legacy alias → navy hover */
-  --color-secondary:      #334766;  /* Slate Blue — secondary text, chart series */
-  --color-accent:         #8C1D27;  /* Oxford Crimson — THE single CTA / brand accent */
-  --color-accent-hover:   #6E141C;  /* crimson hover */
-  --color-gold:           #B08542;  /* Prestige Gold — hairline flourish, active marker, KPI emphasis */
-  --color-gold-text:      #87651F;  /* darker gold for TEXT roles (≥4.5:1 on white/ivory) */
-  --color-gold-soft:      #EBDFC6;  /* gold tint for rare soft fills */
-  --color-background:     #F7F4EF;  /* warm ivory paper — app canvas */
-  --color-text:           #1A1A1A;  /* ink on paper */
+     (Dark Editorial. Amber accent is LOCKED.) */
+  --color-primary:        #1C1D1A;  /* neutral dark — structural fills (sidebar/buttons base) */
+  --color-primary-700:    #262722;  /* slightly different dark — hover/raised structure */
+  --color-primary-hover:  #262722;  /* legacy alias → dark structure hover */
+  --color-secondary:      #BDB9B0;  /* light slate — secondary text, chart series on dark */
+  --color-accent:         #E0A640;  /* Amber — THE single CTA / brand accent (locked) */
+  --color-accent-hover:   #EBB85C;  /* amber hover */
+  --color-gold:           #E0A640;  /* Amber gold — hairline flourish, active marker, KPI emphasis */
+  --color-gold-text:      #E6B45A;  /* lighter gold for TEXT roles (≥4.5:1 on dark canvases) */
+  --color-gold-soft:      rgba(224, 166, 64, 0.16);  /* amber tint for rare soft fills */
+  --color-background:     #101110;  /* near-black canvas — app surface */
+  --color-text:           #F4F2ED;  /* off-white ink on dark */
 
   /* ---- Legacy CTA aliases → now crimson (pages reference --color-cta) ---- */
   --color-cta:            var(--color-accent);
   --color-cta-hover:      var(--color-accent-hover);
 
-  /* ============================================ NEUTRAL RAMP (warm stone) */
-  --stone-50:  #F7F4EF;
-  --stone-100: #EFEAE1;
-  --stone-200: #E3DCD0;
-  --stone-300: #CDC3B4;
-  --stone-400: #A89E8E;
-  --stone-500: #82786A;
-  --stone-600: #5E564B;
-  --stone-700: #433D35;
-  --stone-800: #2A2620;
-  --stone-900: #181613;
+  /* ============================================ NEUTRAL RAMP (warm stone — INVERTED for dark)
+     Names unchanged: stone-50 is now the DARKEST and stone-900 the LIGHTEST, so
+     any surface that used stone-50 as a light fill now reads dark, and any ink
+     that used stone-900 now reads light — meaning preserved on a dark canvas. */
+  --stone-50:  #131412;
+  --stone-100: #1B1C19;
+  --stone-200: #24251F;
+  --stone-300: #34352D;
+  --stone-400: #545047;
+  --stone-500: #7C7870;
+  --stone-600: #9A968C;
+  --stone-700: #BDB9B0;
+  --stone-800: #D8D5CE;
+  --stone-900: #F4F2ED;
 
   /* ---- Legacy gray-* aliases → mapped onto the warm stone ramp ---- */
   --gray-50:  var(--stone-50);
@@ -51,62 +58,62 @@
   --gray-900: var(--stone-900);
 
   /* ================================================ SURFACES & BORDERS */
-  --surface:          #FFFFFF;
-  --surface-raised:   #FFFFFF;
-  --surface-sunken:   #FBF9F5;
-  --surface-hover:    #F4F0E9;
-  --surface-active:   #F0EFF4;
-  --border:           var(--stone-200);
-  --border-strong:    var(--stone-300);
+  --surface:          #161714;
+  --surface-raised:   #1C1D1A;
+  --surface-sunken:   #0C0D0C;
+  --surface-hover:    #20211D;
+  --surface-active:   #262722;
+  --border:           rgba(255, 255, 255, 0.10);
+  --border-strong:    rgba(255, 255, 255, 0.16);
 
-  /* ---- Sidebar (Academic Navy spine) ---- */
-  --sidebar-bg:        #0F1E3D;
-  --sidebar-bg-raised: #16294F;
-  --sidebar-fg:        #C9D2E2;
-  --sidebar-fg-muted:  #7F8CA6;
-  --sidebar-active-bg: #16294F;
-  --sidebar-active-fg: #FFFFFF;
+  /* ---- Sidebar (near-black spine) ---- */
+  --sidebar-bg:        #0C0D0C;
+  --sidebar-bg-raised: #1A1B17;
+  --sidebar-fg:        #C9C5BC;
+  --sidebar-fg-muted:  #807C73;
+  --sidebar-active-bg: #1F201B;
+  --sidebar-active-fg: #F4F2ED;
   --sidebar-accent:    var(--color-accent);
   --sidebar-brand-gold:var(--color-gold);
 
   /* ====================================================== TEXT ROLES */
-  --text-strong: #1A1A1A;
-  --text-body:   #2A2620;
-  --text-muted:  #5E564B;
-  --text-faint:  #82786A;
-  --text-on-dark:#F7F4EF;
+  --text-strong: #F4F2ED;
+  --text-body:   #D8D5CE;
+  --text-muted:  #9A968C;
+  --text-faint:  #88847B;  /* placeholders/disabled hints — tuned to ≥4.5:1 on dark canvases */
+  --text-on-dark:#F4F2ED;
   --text-link:   var(--color-accent);
   --text-link-hover: var(--color-accent-hover);
 
-  /* ============================== STATUS (base / soft-bg / on-soft fg) */
-  --success: #2E7D5B;  --success-bg: #E2F0E8;  --success-fg: #1F5C42;
-  --warning: #B08542;  --warning-bg: #F3E9D6;  --warning-fg: #7A5A21;
-  --danger:  #B3261E;  --danger-bg:  #F6E1DF;  --danger-fg:  #8C1D27;
-  --info:    #334766;  --info-bg:    #E6EAF0;  --info-fg:    #243349;
-  --neutral: #A89E8E;  --neutral-bg: #EFEAE1;  --neutral-fg: #433D35;
+  /* ============================== STATUS (base / dark-translucent bg / on-bg fg) */
+  --success: #43B581;  --success-bg: rgba(67, 181, 129, 0.14);  --success-fg: #7FD7A8;
+  --warning: #E0A640;  --warning-bg: rgba(224, 166, 64, 0.14);  --warning-fg: #E8C078;
+  --danger:  #C8433C;  --danger-bg:  rgba(229, 83, 75, 0.14);   --danger-fg:  #F0938C;
+  --info:    #5B8DEF;  --info-bg:    rgba(91, 141, 239, 0.14);  --info-fg:    #9BBAF5;
+  --neutral: #545047;  --neutral-bg: rgba(255, 255, 255, 0.07); --neutral-fg: #BDB9B0;
 
   /* =========================================================== SPACING */
   --space-xs: 4px;  --space-sm: 8px;  --space-md: 16px;
   --space-lg: 24px; --space-xl: 32px; --space-2xl: 48px; --space-3xl: 64px;
 
-  /* ============================================= RADIUS (editorial) */
-  --radius-sm:   3px;
-  --radius-md:   6px;
-  --radius-lg:   8px;
-  --radius-xl:   12px;
+  /* ============================================= RADIUS (rounded / pill) */
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
   --radius-pill: 9999px;
 
-  /* ====================================== SHADOWS (soft, paper-like) */
-  --shadow-sm: 0 1px 2px rgba(26,26,26,0.04);
-  --shadow-md: 0 4px 12px rgba(15,30,61,0.06);
-  --shadow-lg: 0 12px 28px rgba(15,30,61,0.10);
-  --shadow-xl: 0 24px 48px rgba(15,30,61,0.14);
-  --shadow-focus: 0 0 0 3px rgba(15,30,61,0.15);
-  --shadow-focus-crimson: 0 0 0 3px rgba(140,29,39,0.22);
+  /* ====================================== SHADOWS (deep, dark studio) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+  --shadow-xl: 0 28px 60px rgba(0, 0, 0, 0.6);
+  --shadow-focus: 0 0 0 3px rgba(224, 166, 64, 0.40);
+  --shadow-focus-crimson: 0 0 0 3px rgba(224, 166, 64, 0.40);
 
   /* ======================================================= TYPOGRAPHY */
-  --font-display: 'Crimson Pro', Georgia, 'Times New Roman', serif;
-  --font-heading: var(--font-display);
+  --font-display: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-heading: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono:    'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
 
@@ -151,7 +158,7 @@
   --shadow: var(--shadow-sm);
 
   font-family: var(--font-body);
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 /* ---------------------------------------------------------------- Reset */
@@ -225,9 +232,9 @@ textarea,
   font: inherit;
   height: 38px;
   padding: 9px 13px;
-  border: 1px solid var(--stone-300);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-sunken);
   color: var(--text-strong);
   width: 100%;
   transition: border-color var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease);
@@ -250,7 +257,7 @@ select:focus,
 textarea:focus,
 .input:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: var(--color-accent);
   box-shadow: var(--shadow-focus);
 }
 
@@ -282,10 +289,10 @@ label {
   justify-content: center;
   gap: var(--space-sm);
   padding: 10px 18px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--stone-300);
-  background: var(--surface);
-  color: var(--text-body);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-strong);
   font-family: var(--font-body);
   font-size: var(--fs-body);
   font-weight: var(--fw-medium);
@@ -300,7 +307,7 @@ label {
 
 .btn:hover {
   background: var(--surface-hover);
-  border-color: var(--stone-400);
+  border-color: var(--border-strong);
 }
 
 .btn:disabled {
@@ -309,50 +316,50 @@ label {
 }
 
 .btn:disabled:hover {
-  background: var(--surface);
-  border-color: var(--stone-300);
+  background: transparent;
+  border-color: var(--border-strong);
 }
 
-/* Primary = Oxford Crimson CTA (white text ≈ 8.9:1, AAA). */
+/* Primary = near-white pill CTA (dark text ≈ 16:1). The signature CTA. */
 .btn-primary,
 .btn--primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #FFFFFF;
+  background: #F4F2ED;
+  border-color: #F4F2ED;
+  color: #161714;
   font-weight: var(--fw-semibold);
 }
 
 .btn-primary:hover,
 .btn--primary:hover {
-  background: var(--color-accent-hover);
-  border-color: var(--color-accent-hover);
+  background: #D8D5CE;
+  border-color: #D8D5CE;
   box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:focus-visible,
 .btn--primary:focus-visible {
-  box-shadow: var(--shadow-focus-crimson);
+  box-shadow: var(--shadow-focus);
 }
 
 .btn-primary:disabled:hover,
 .btn--primary:disabled:hover {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: #F4F2ED;
+  border-color: #F4F2ED;
 }
 
-/* Secondary = navy outline. */
+/* Secondary = transparent + light hairline border. */
 .btn-secondary,
 .btn--secondary {
   background: transparent;
-  border: 1px solid var(--color-primary);
-  color: var(--color-primary);
+  border: 1px solid var(--border-strong);
+  color: var(--text-strong);
   font-weight: var(--fw-semibold);
 }
 
 .btn-secondary:hover,
 .btn--secondary:hover {
-  background: rgba(15, 30, 61, 0.06);
-  border-color: var(--color-primary);
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
 }
 
 /* Ghost = low-emphasis toolbar actions. */
@@ -367,19 +374,19 @@ label {
   border-color: transparent;
 }
 
-/* Blue → navy solid (never a second CTA). */
+/* Blue → neutral dark solid with light text (never a second CTA). */
 .btn-blue,
 .btn--blue {
   background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: #FFFFFF;
+  border-color: var(--border-strong);
+  color: var(--text-strong);
   font-weight: var(--fw-semibold);
 }
 
 .btn-blue:hover,
 .btn--blue:hover {
   background: var(--color-primary-700);
-  border-color: var(--color-primary-700);
+  border-color: var(--border-strong);
 }
 
 /* Danger = destructive (crimson-family danger, white text). */
@@ -393,8 +400,8 @@ label {
 
 .btn-danger:hover,
 .btn--danger:hover {
-  background: #8C1D27;
-  border-color: #8C1D27;
+  background: #B23A33;
+  border-color: #B23A33;
 }
 
 .btn-sm,
@@ -462,7 +469,7 @@ label {
   width: 28px;
   height: 28px;
   border-radius: var(--radius-md);
-  background: rgba(176, 133, 66, 0.14);
+  background: var(--color-gold-soft);
   color: var(--color-gold);
   flex-shrink: 0;
 }
@@ -661,7 +668,7 @@ label {
 
 .topbar__search input:focus {
   background: var(--surface);
-  border-color: var(--color-primary);
+  border-color: var(--color-accent);
 }
 
 .topbar__icon-btn {
@@ -718,7 +725,7 @@ label {
 
 .conn-open .conn-dot {
   background: var(--success);
-  box-shadow: 0 0 0 3px rgba(46, 125, 91, 0.18);
+  box-shadow: 0 0 0 3px rgba(67, 181, 129, 0.22);
 }
 
 .conn-connecting .conn-dot {
@@ -865,7 +872,7 @@ label {
 /* ============================================================== Cards */
 .card {
   background: var(--surface);
-  border: 1px solid var(--stone-200);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   padding: 26px;
@@ -879,7 +886,7 @@ label {
 
 .card--interactive:hover {
   box-shadow: var(--shadow-md);
-  border-color: var(--stone-300);
+  border-color: var(--border-strong);
 }
 
 .card-title {
@@ -889,7 +896,7 @@ label {
   color: var(--text-strong);
   margin: 0 0 var(--space-md);
   padding-bottom: var(--space-sm);
-  border-bottom: 1px solid var(--stone-200);
+  border-bottom: 1px solid var(--border);
 }
 
 .grid {
@@ -966,7 +973,7 @@ label {
   padding-bottom: 12px;
 }
 
-/* Signature: Prestige Gold institutional underline. */
+/* Signature: amber institutional underline. */
 .page-title::after {
   content: "";
   position: absolute;
@@ -977,13 +984,21 @@ label {
   background: var(--color-gold);
 }
 
+/* Editorial accent: an italic Playfair-serif word inside the display heading. */
+.page-title em {
+  font-family: var(--font-heading);
+  font-style: italic;
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
 .section {
   margin-bottom: var(--space-xl);
 }
 
 .divider {
   height: 1px;
-  background: var(--stone-200);
+  background: var(--border);
   border: none;
   margin: var(--space-lg) 0;
 }
@@ -1002,12 +1017,13 @@ label {
 /* Drop-cap for hero/editorial intros (additive). */
 .dropcap::first-letter {
   float: left;
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
+  font-style: italic;
   font-weight: var(--fw-semibold);
   font-size: 3.2em;
   line-height: 0.8;
   padding: 4px 10px 0 0;
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 
 /* Quiet reveal-on-mount (additive). */
@@ -1023,7 +1039,7 @@ label {
 /* ============================================================ Stat tiles */
 .stat {
   background: var(--surface);
-  border: 1px solid var(--stone-200);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
   box-shadow: var(--shadow-sm);
@@ -1091,7 +1107,7 @@ label {
 .table-wrap {
   overflow-x: auto;
   border-radius: var(--radius-md);
-  border: 1px solid var(--stone-200);
+  border: 1px solid var(--border);
 }
 
 table.data {
@@ -1105,7 +1121,7 @@ table.data th,
 table.data td {
   text-align: left;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--stone-200);
+  border-bottom: 1px solid var(--border);
   white-space: nowrap;
   color: var(--text-body);
 }
@@ -1119,7 +1135,7 @@ table.data th {
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--text-muted);
-  background: var(--stone-50);
+  background: var(--surface-sunken);
   border-bottom: 1px solid var(--border-strong);
 }
 
@@ -1238,6 +1254,19 @@ table.data th.data__num {
   opacity: 0.85;
 }
 
+/* Inline icon+text row used by error/success messages (additive — replaces
+   former inline flex styles in ui.tsx so state markup stays class-driven). */
+.state__line {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* Secondary detail line (e.g. the code: message under a 502 notice). */
+.state__detail {
+  margin-top: 6px;
+}
+
 .notice {
   border: 1px solid var(--warning);
   background: var(--warning-bg);
@@ -1304,10 +1333,36 @@ table.data th.data__num {
   margin-bottom: var(--space-sm);
 }
 
+/* Shell route-transition title bar (additive; replaces inline literals in
+   Layout's <Suspense> fallback so the shell stays class+token driven). */
+.skeleton--title {
+  height: 16px;
+  width: 40%;
+}
+
 .skeleton-stack {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+/* State-shaped skeletons (additive — Requirement 8.1). A KPI tile mimics a
+   StatCard so the loading state matches the final content shape; a table row
+   mimics a data-table row. New classes only; nothing renamed. */
+.skeleton-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-md);
+}
+
+.skeleton--kpi {
+  height: 92px;
+  border-radius: var(--radius-md);
+}
+
+.skeleton--table-row {
+  height: 44px;
+  border-radius: var(--radius-sm);
 }
 
 @keyframes skeleton-shimmer {
@@ -1342,11 +1397,11 @@ table.data th.data__num {
   content: "";
   grid-column: 1;
   grid-row: 1;
-  background: radial-gradient(120% 120% at 20% 0%, #16294F 0%, #0F1E3D 60%);
-  border-right: 1px solid rgba(176, 133, 66, 0.35);
+  background: radial-gradient(120% 120% at 20% 0%, #1C1D1A 0%, #0C0D0C 60%);
+  border-right: 1px solid var(--color-gold-soft);
 }
 
-/* Crest panel content sits on the navy column (additive). */
+/* Crest panel content sits on the charcoal column (additive). */
 .auth-crest {
   grid-column: 1;
   grid-row: 1;
@@ -1365,7 +1420,7 @@ table.data th.data__num {
   width: 56px;
   height: 56px;
   border-radius: var(--radius-lg);
-  background: rgba(176, 133, 66, 0.14);
+  background: var(--color-gold-soft);
   color: var(--color-gold);
   margin-bottom: var(--space-lg);
 }
@@ -1375,7 +1430,7 @@ table.data th.data__num {
   font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: var(--tracking-label);
-  color: #CDA75E;
+  color: var(--color-gold-text);
   margin-bottom: var(--space-sm);
 }
 
@@ -1385,7 +1440,7 @@ table.data th.data__num {
   font-weight: var(--fw-bold);
   letter-spacing: 0.3px;
   margin: 0 0 var(--space-sm);
-  color: #FFFFFF;
+  color: var(--text-strong);
 }
 
 .auth-crest__rule {
@@ -1400,7 +1455,7 @@ table.data th.data__num {
   font-family: var(--font-body);
   font-size: var(--fs-body);
   line-height: 1.7;
-  color: #C9D2E2;
+  color: var(--text-body);
   margin: 0;
 }
 
@@ -1416,7 +1471,7 @@ table.data th.data__num {
   align-self: center;
   justify-self: center;
   background: var(--surface);
-  border: 1px solid var(--stone-200);
+  border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   padding: var(--space-2xl);
@@ -1462,7 +1517,7 @@ table.data th.data__num {
     align-items: center;
     justify-content: center;
     padding: var(--space-lg);
-    background: radial-gradient(140% 120% at 50% -20%, #16294F 0%, #0F1E3D 55%, var(--color-background) 55%);
+    background: radial-gradient(140% 120% at 50% -20%, #1C1D1A 0%, #0C0D0C 55%, var(--color-background) 55%);
   }
   .auth-wrap::before {
     display: none;
@@ -1493,10 +1548,10 @@ table.data th.data__num {
   padding: 4px 10px;
   border-radius: var(--radius-pill);
   background: var(--surface-active);
-  color: var(--color-primary);
+  color: var(--text-strong);
   font-size: var(--fs-xs);
   font-weight: var(--fw-medium);
-  border: 1px solid var(--stone-200);
+  border: 1px solid var(--border);
 }
 
 .chip button {
@@ -1552,8 +1607,9 @@ table.data th.data__num {
 }
 
 pre.code {
-  background: var(--stone-900);
-  color: var(--stone-100);
+  background: var(--surface-sunken);
+  color: var(--text-body);
+  border: 1px solid var(--border);
   padding: var(--space-md);
   border-radius: var(--radius-md);
   overflow-x: auto;
@@ -1566,7 +1622,7 @@ pre.code {
 .tabs {
   display: flex;
   gap: var(--space-xs);
-  border-bottom: 1px solid var(--stone-200);
+  border-bottom: 1px solid var(--border);
   margin-bottom: var(--space-lg);
 }
 
@@ -1591,8 +1647,8 @@ pre.code {
 
 .tab--active,
 .tabs button.tab--active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
 }
 
 /* ============================================================== Modal */
@@ -1600,7 +1656,7 @@ pre.code {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 30, 61, 0.45);
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   display: flex;
@@ -1701,7 +1757,7 @@ pre.code {
   height: 26px;
   border-radius: 50%;
   background: var(--surface-active);
-  color: var(--color-primary);
+  color: var(--color-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1869,7 +1925,7 @@ pre.code {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(15, 30, 61, 0.45);
+    background: rgba(0, 0, 0, 0.6);
     z-index: 55;
   }
 

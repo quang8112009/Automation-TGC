@@ -86,11 +86,11 @@ export function Trends() {
 
       <div className="card">
         <h2 className="card-title">Nghiên cứu xu hướng theo thị trường</h2>
-        <div className="muted" style={{ marginBottom: 12 }}>
+        <p className="muted">
           Chọn thị trường XKLĐ và để hệ thống phát hiện từ khóa / chủ đề nhu cầu cao. Khi AI (Gemini)
           được cấu hình, kết quả do mô hình tạo; nếu chưa cấu hình, hệ thống dùng bộ dữ liệu nền tảng
           xác định sẵn (vẫn là kết quả hợp lệ).
-        </div>
+        </p>
         <div className="toolbar">
           <div className="field">
             <label>Thị trường</label>
@@ -113,13 +113,13 @@ export function Trends() {
         {researchMutation.error != null && <ErrorMessage error={researchMutation.error} />}
         {researchMutation.data && (
           <SuccessMessage>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="inline-list" style={{ alignItems: 'center' }}>
               <span>
                 Đã tạo {researchMutation.data.created.length} tín hiệu xu hướng cho{' '}
                 {marketingMarketLabel(market)}.
               </span>
               {lastAiGenerated !== null && <AiGroundingBadge aiGenerated={lastAiGenerated} />}
-            </div>
+            </span>
           </SuccessMessage>
         )}
       </div>
@@ -151,7 +151,7 @@ export function Trends() {
 
       <div className="card">
         {trendsQuery.isLoading ? (
-          <Loading label="Đang tải…" />
+          <Loading variant="table" rows={6} label="Đang tải xu hướng…" />
         ) : trendsQuery.error ? (
           <ErrorMessage error={trendsQuery.error} />
         ) : trends.length > 0 ? (
@@ -174,12 +174,12 @@ export function Trends() {
                     <td>
                       <strong>{t.keyword}</strong>
                       {t.rationale && (
-                        <div className="muted" style={{ whiteSpace: 'normal', maxWidth: 320 }}>
+                        <div className="muted" style={{ whiteSpace: 'normal', maxWidth: '44ch' }}>
                           {t.rationale}
                         </div>
                       )}
                     </td>
-                    <td style={{ whiteSpace: 'normal', maxWidth: 240 }}>{t.topic || '—'}</td>
+                    <td style={{ whiteSpace: 'normal', maxWidth: '32ch' }}>{t.topic || '—'}</td>
                     <td>{trendIntentLabel(t.intent)}</td>
                     <td>
                       <span className="badge badge-blue">{Math.round(t.demandScore)}</span>
@@ -229,7 +229,19 @@ export function Trends() {
             </table>
           </div>
         ) : (
-          <Empty label="Chưa có xu hướng nào. Hãy chạy 'Nghiên cứu xu hướng' cho thị trường này." />
+          <Empty
+            icon="trending-up"
+            label="Chưa có xu hướng nào. Hãy chạy 'Nghiên cứu xu hướng' cho thị trường này."
+            action={
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={researchMutation.isPending}
+                onClick={() => researchMutation.mutate()}
+              >
+                {researchMutation.isPending ? 'Đang nghiên cứu…' : 'Nghiên cứu xu hướng'}
+              </button>
+            }
+          />
         )}
       </div>
     </div>

@@ -5,7 +5,8 @@
  * decisions/wording come from the pure engine; this class only does Prisma I/O
  * and channel sending.
  */
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import type { AuthInfo } from '../http/authMiddleware';
 import { NotFoundError } from '../infra/errors';
 import { isDropOff, buildFollowUpMessage } from './followUpEngine';
 import type { ChannelSender, IntakeChannelValue } from './intakeService';
@@ -96,9 +97,26 @@ export class FollowUpService {
     return { sent, failed };
   }
 
-  /** Paginated list of follow-up tasks (optional status filter). */
-  async list(status: string | undefined, page = 1, limit = 20): Promise<unknown> {
-    const where = status ? { status: status as never } : {};
+  /**
+   * Paginated list of follow-up tasks (optional status filter). SALES is scoped
+   * to follow-ups attached to candidates they own (`candidateProfile.assignedTo
+   * === actor.userId`); tasks with no candidate (candidateId null) are excluded
+   * for SALES (fail-closed, Req 3.6/4.4). ADMIN is unconstrained.
+   */
+  async list(status: string | undefined, page = 1, limit = 20, actor: AuthInfo): Promise<unknown> {
+    const where: Prisma.FollowUpTaskWhereInput = status ? { status: status as never } : {};
+
+    if (actor.role === 'SALES') {
+      // Resolve the candidate ids this SALES user owns, then constrain to them.
+      // `candidateId in {ownedIds}` excludes null-candidate tasks automatically
+      // (null is never a member of the list) → fail-closed for unowned/global.
+      const owned = await this.prisma.candidateProfile.findMany({
+        where: { assignedTo: actor.userId },
+        select: { id: true },
+      });
+      where.candidateId = { in: owned.map((c) => c.id) };
+    }
+
     const safePage = page > 0 ? page : 1;
     const safeLimit = limit > 0 ? limit : 20;
     const [items, total] = await Promise.all([

@@ -39,35 +39,42 @@ enum InsightStatus {
 }
 
 model UserAccount {
-  id                String    @id @default(uuid())
-  username          String    @unique
-  email             String
-  passwordHash      String
-  role              Role      @default(ADMIN)
-  failedLoginCount  Int       @default(0)
-  locked            Boolean   @default(false)
-  lockedAt          DateTime?
-  createdAt         DateTime  @default(now())
-  sessions          JwtSession[]
-  assignedLeads     Lead[]
-  notifications     Notification[] @relation("UserNotifications")
+  id               String         @id @default(uuid())
+  username         String         @unique
+  email            String
+  passwordHash     String
+  role             Role           @default(ADMIN)
+  failedLoginCount Int            @default(0)
+  locked           Boolean        @default(false)
+  lockedAt         DateTime?
+  // Time-boxed lockout (security): when set and in the future, login is refused
+  // (423) but auto-recovers once the instant passes — so a credential-stuffing
+  // burst against an account (incl. the only ADMIN) cannot permanently DoS it.
+  // An explicit ADMIN unlock still clears `locked` immediately regardless.
+  lockedUntil      DateTime?
+  createdAt        DateTime       @default(now())
+  sessions         JwtSession[]
+  assignedLeads    Lead[]
+  notifications    Notification[] @relation("UserNotifications")
 }
 
 model JwtSession {
-  sessionId        String    @id @default(uuid())
+  sessionId        String      @id @default(uuid())
   userId           String
   user             UserAccount @relation(fields: [userId], references: [id])
-  status           String    @default("ACTIVE") // ACTIVE | REVOKED
+  status           String      @default("ACTIVE") // ACTIVE | REVOKED
   accessExpiresAt  DateTime
   refreshExpiresAt DateTime
-  createdAt        DateTime  @default(now())
+  createdAt        DateTime    @default(now())
   revokedAt        DateTime?
+
+  @@index([userId])
 }
 
 model PlatformToken {
   id                       String    @id @default(uuid())
   platform                 String    @unique
-  type                     String    // access_token | refresh_token | api_key | service_account
+  type                     String // access_token | refresh_token | api_key | service_account
   expiresAt                DateTime?
   refreshWindowSeconds     Int       @default(86400)
   status                   String    @default("VALID")
@@ -76,94 +83,98 @@ model PlatformToken {
 }
 
 model DomainContext {
-  id                  String   @id @default(uuid())
-  domainName          String   @unique
-  contextDescription  String   @default("")
-  defaultToneOfVoice  String   @default("friendly")
-  createdAt           DateTime @default(now())
-  personas            ContentPersona[]
-  drafts              ContentDraft[]
+  id                 String           @id @default(uuid())
+  domainName         String           @unique
+  contextDescription String           @default("")
+  defaultToneOfVoice String           @default("friendly")
+  createdAt          DateTime         @default(now())
+  personas           ContentPersona[]
+  drafts             ContentDraft[]
 }
 
 model ContentPersona {
-  id              String   @id @default(uuid())
+  id              String         @id @default(uuid())
   domainId        String
-  domain          DomainContext @relation(fields: [domainId], references: [id])
+  domain          DomainContext  @relation(fields: [domainId], references: [id])
   personaName     String
   age             String
-  interests       String   @default("")
+  interests       String         @default("")
   targetNeeds     String
   painPoints      String
   toneOfVoice     String
   recommendedTone String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
   drafts          ContentDraft[]
 }
 
 model ContentDraft {
-  id                       String   @id @default(uuid())
+  id                       String           @id @default(uuid())
   domainId                 String
-  domain                   DomainContext @relation(fields: [domainId], references: [id])
+  domain                   DomainContext    @relation(fields: [domainId], references: [id])
   personaId                String
-  persona                  ContentPersona @relation(fields: [personaId], references: [id])
+  persona                  ContentPersona   @relation(fields: [personaId], references: [id])
   objective                String
   title                    String
   body                     String
-  status                   ContentStatus @default(DRAFT)
-  generatedWithoutFeedback Boolean  @default(false)
+  status                   ContentStatus    @default(DRAFT)
+  generatedWithoutFeedback Boolean          @default(false)
   rejectionReason          String?
-  previewPresented         Boolean  @default(false)
+  previewPresented         Boolean          @default(false)
   // --- AI marketing autopilot (additive; safe defaults keep existing flow intact) ---
-  format                   String   @default("GENERIC") // GENERIC|SEO_ARTICLE|FANPAGE_CAPTION|VIDEO_SCRIPT|EMAIL|CARE_MESSAGE|CHATBOT_FAQ
+  format                   String           @default("GENERIC") // GENERIC|SEO_ARTICLE|FANPAGE_CAPTION|VIDEO_SCRIPT|EMAIL|CARE_MESSAGE|CHATBOT_FAQ
   market                   String? // market code: JAPAN|KOREA|GERMANY|TAIWAN|AUSTRALIA|LITHUANIA|EUROPE|...
-  language                 String   @default("vi")
+  language                 String           @default("vi")
   planItemId               String?
-  seoKeywords              Json     @default("[]")
+  seoKeywords              Json             @default("[]")
   // Approval_Queue manual priority ordering (additive; default keeps deadline-based order)
-  priorityIndex            Int      @default(0)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  priorityIndex            Int              @default(0)
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
   ctas                     DraftCta[]
   media                    MediaAsset[]
   scheduledPosts           ScheduledPost[]
   generatedAssets          GeneratedAsset[]
+
+  @@index([createdAt])
+  @@index([status])
 }
 
 model DraftCta {
-  id       String @id @default(uuid())
-  draftId  String
-  draft    ContentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  ctaText  String
+  id      String       @id @default(uuid())
+  draftId String
+  draft   ContentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  ctaText String
 }
 
 model MediaAsset {
-  id         String   @id @default(uuid())
+  id         String       @id @default(uuid())
   draftId    String
   draft      ContentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  kind       String   // image | video | photo_carousel
+  kind       String // image | video | photo_carousel
   storageKey String
   mimeType   String
-  createdAt  DateTime @default(now())
+  createdAt  DateTime     @default(now())
 }
 
 model ScheduledPost {
-  id             String   @id @default(uuid())
+  id             String        @id @default(uuid())
   draftId        String
-  draft          ContentDraft @relation(fields: [draftId], references: [id])
+  draft          ContentDraft  @relation(fields: [draftId], references: [id])
   platform       String
   scheduledAt    DateTime
   status         ContentStatus @default(SCHEDULED)
-  idempotencyKey String   @unique
+  idempotencyKey String        @unique
   externalPostId String?
   postUrl        String?
   errorCode      String?
   failureReason  String?
-  retryCount     Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  retryCount     Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@unique([platform, idempotencyKey])
+  @@index([status, scheduledAt])
 }
 
 model AnalyticsRecord {
@@ -179,49 +190,56 @@ model AnalyticsRecord {
   clickThrough    Int?
   reach           Int?
   collectedAt     DateTime @default(now())
+
+  @@index([publishedPostId, collectedAt])
 }
 
 model PerformanceRecord {
-  id              String   @id @default(uuid())
-  postId          String
-  domainCategory  String
-  contentTopic    String
-  personaId       String
-  toneOfVoice     String
-  objective       String
-  platform        String
-  postTimeSlot    String
-  contentLength   Int
-  hasCta          Boolean
-  ctaType         String
-  mediaType       String
-  conversionRate  Float
-  engagementRate  Float
-  ctaClickRate    Float
-  followRate      Float?
+  id               String   @id @default(uuid())
+  postId           String
+  domainCategory   String
+  contentTopic     String
+  personaId        String
+  toneOfVoice      String
+  objective        String
+  platform         String
+  postTimeSlot     String
+  contentLength    Int
+  hasCta           Boolean
+  ctaType          String
+  mediaType        String
+  conversionRate   Float
+  engagementRate   Float
+  ctaClickRate     Float
+  followRate       Float?
   performanceLabel String
-  scoredAt        DateTime @default(now())
+  scoredAt         DateTime @default(now())
+
+  @@index([scoredAt])
+  @@index([contentTopic, scoredAt])
 }
 
 model LearningInsight {
-  id              String   @id @default(uuid())
-  insightType     String
-  insightStatus   InsightStatus @default(NEW)
-  subject         Json
-  metrics         Json
+  id                String        @id @default(uuid())
+  insightType       String
+  insightStatus     InsightStatus @default(NEW)
+  subject           Json
+  metrics           Json
   recommendedChange Json
-  modifiedChange  Json?
-  confidenceScore Float
-  sampleSize      Int
-  analysisPeriod  String
-  rejectionReason String?
-  generatedAt     DateTime @default(now())
+  modifiedChange    Json?
+  confidenceScore   Float
+  sampleSize        Int
+  analysisPeriod    String
+  rejectionReason   String?
+  generatedAt       DateTime      @default(now())
   // Approval_Queue manual priority ordering (additive; default keeps deadline-based order)
-  priorityIndex   Int      @default(0)
+  priorityIndex     Int           @default(0)
+
+  @@index([insightStatus, generatedAt])
 }
 
 model AiPromptContext {
-  id                       String   @id @default(uuid())
+  id                       String    @id @default(uuid())
   contextVersion           String
   lastUpdatedFromAnalytics DateTime?
   topPerformingTopics      Json
@@ -242,7 +260,7 @@ model AuditEntry {
 }
 
 model Lead {
-  leadId         String   @id @default(uuid())
+  leadId         String             @id @default(uuid())
   name           String?
   phone          String?
   email          String?
@@ -254,13 +272,17 @@ model Lead {
   contentPostId  String
   domainCategory String?
   contentTopic   String?
-  status         LeadStatus @default(NEW)
+  status         LeadStatus         @default(NEW)
   note           String?
   assignedTo     String?
-  assignee       UserAccount? @relation(fields: [assignedTo], references: [id])
-  unattributed   Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  assignee       UserAccount?       @relation(fields: [assignedTo], references: [id])
+  unattributed   Boolean            @default(false)
+  // Webhook idempotency (security): a stable per-delivery key (provider event id
+  // or HMAC of the canonical payload). A unique index makes a replayed webhook
+  // delivery a no-op (upsert) instead of creating duplicate Lead rows.
+  dedupKey       String?            @unique
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
   history        LeadHistoryEntry[]
 
   @@index([source])
@@ -285,11 +307,11 @@ model LeadHistoryEntry {
 }
 
 model TokenAlert {
-  id        String   @id @default(uuid())
-  platform  String
-  kind      String
-  reason    String?
-  raisedAt  DateTime @default(now())
+  id       String   @id @default(uuid())
+  platform String
+  kind     String
+  reason   String?
+  raisedAt DateTime @default(now())
 }
 
 // --- Service accounts (Foundation Req 8): non-interactive internal identities ---
@@ -430,27 +452,28 @@ model Branch {
 }
 
 model JobOrder {
-  id             String            @id @default(uuid())
-  code           String            @unique // e.g. KN6131
+  id             String             @id @default(uuid())
+  code           String             @unique // e.g. KN6131
   title          String
-  industry       String            @default("") // nghề: Xây dựng, Điều dưỡng, ...
-  visaType       VisaType          @default(TOKUTEI)
-  market         RecruitmentMarket @default(JAPAN)
-  workLocation   String            @default("") // prefecture / region
-  salaryText     String            @default("") // display, e.g. "42-57tr"
+  industry       String             @default("") // nghề: Xây dựng, Điều dưỡng, ...
+  visaType       VisaType           @default(TOKUTEI)
+  market         RecruitmentMarket  @default(JAPAN)
+  workLocation   String             @default("") // prefecture / region
+  salaryText     String             @default("") // display, e.g. "42-57tr"
   salaryMinVndM  Int? // million VND (optional, for filtering)
   salaryMaxVndM  Int?
-  quantity       Int               @default(1)
-  gender         String            @default("ANY") // MALE | FEMALE | ANY
-  nationalityReq String            @default("")
-  status         JobOrderStatus    @default(OPEN)
+  quantity       Int                @default(1)
+  gender         String             @default("ANY") // MALE | FEMALE | ANY
+  nationalityReq String             @default("")
+  status         JobOrderStatus     @default(OPEN)
   deadline       DateTime?
-  description    String            @default("")
+  description    String             @default("")
   sourcePostId   String? // link to a published ScheduledPost/content when applicable
   branchId       String?
-  branch         Branch?           @relation(fields: [branchId], references: [id])
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  branch         Branch?            @relation(fields: [branchId], references: [id])
+  assignedTo     String? // consultant userId được giao đơn hàng này (assigned-only scope for SALES)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
   candidates     CandidateProfile[]
 
   @@index([market])
@@ -458,6 +481,7 @@ model JobOrder {
   @@index([industry])
   @@index([status])
   @@index([code])
+  @@index([assignedTo])
 }
 
 model CandidateProfile {
@@ -488,6 +512,12 @@ model CandidateProfile {
   updatedAt         DateTime                @updatedAt
   history           CandidateStageHistory[]
   documents         DocumentChecklistItem[]
+  // --- Study-abroad AI advisor suite (additive back-relations; existing columns untouched) ---
+  academic          AcademicProfile?
+  essays            EssayDraft[]
+  interviews        InterviewSession[]
+  applications      ApplicationCase[]
+  roadmaps          RoadmapNarrative[]
 
   @@index([stage])
   @@index([desiredMarket])
@@ -547,16 +577,16 @@ enum TrendStatus {
 // A researched market trend / keyword / high-demand topic. Produced by the
 // TrendResearchService (AI + heuristics) and reviewed before driving a plan.
 model TrendSignal {
-  id          String      @id @default(uuid())
-  market      String // JAPAN|KOREA|GERMANY|TAIWAN|AUSTRALIA|LITHUANIA|EUROPE|...
-  keyword     String
-  topic       String      @default("")
-  intent      String      @default("") // e.g. salary | visa | industry | cost | eligibility
-  demandScore Float       @default(0) // 0..100 estimated demand/interest
-  rationale   String      @default("")
-  sources     Json        @default("[]")
-  status      TrendStatus @default(DISCOVERED)
-  discoveredAt DateTime   @default(now())
+  id           String      @id @default(uuid())
+  market       String // JAPAN|KOREA|GERMANY|TAIWAN|AUSTRALIA|LITHUANIA|EUROPE|...
+  keyword      String
+  topic        String      @default("")
+  intent       String      @default("") // e.g. salary | visa | industry | cost | eligibility
+  demandScore  Float       @default(0) // 0..100 estimated demand/interest
+  rationale    String      @default("")
+  sources      Json        @default("[]")
+  status       TrendStatus @default(DISCOVERED)
+  discoveredAt DateTime    @default(now())
 
   @@index([market])
   @@index([status])
@@ -572,18 +602,18 @@ enum ContentPlanStatus {
 // A per-market content plan (kế hoạch nội dung) for a date range, produced by
 // the ContentPlanner from trends + analytics context.
 model ContentPlan {
-  id        String            @id @default(uuid())
-  market    String
-  title     String
-  objective String            @default("Lead") // Lead|View|Follow
+  id         String            @id @default(uuid())
+  market     String
+  title      String
+  objective  String            @default("Lead") // Lead|View|Follow
   periodFrom DateTime
-  periodTo  DateTime
-  status    ContentPlanStatus @default(DRAFT)
-  notes     String            @default("")
-  createdBy String?
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  items     ContentPlanItem[]
+  periodTo   DateTime
+  status     ContentPlanStatus @default(DRAFT)
+  notes      String            @default("")
+  createdBy  String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  items      ContentPlanItem[]
 
   @@index([market])
   @@index([status])
@@ -591,21 +621,21 @@ model ContentPlan {
 
 // One scheduled idea inside a plan: which format, channel, topic, target date.
 model ContentPlanItem {
-  id          String   @id @default(uuid())
-  planId      String
-  plan        ContentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  market      String
-  channel     String // facebook|tiktok|youtube|website|zalo|email
-  format      String // SEO_ARTICLE|FANPAGE_CAPTION|VIDEO_SCRIPT|EMAIL|CARE_MESSAGE|CHATBOT_FAQ
-  topic       String
-  keyword     String   @default("")
-  objective   String   @default("Lead")
-  targetDate  DateTime?
-  status      String   @default("PLANNED") // PLANNED|GENERATED|SCHEDULED|PUBLISHED|SKIPPED
-  draftId     String?
-  trendId     String?
-  orderIndex  Int      @default(0)
-  createdAt   DateTime @default(now())
+  id         String      @id @default(uuid())
+  planId     String
+  plan       ContentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  market     String
+  channel    String // facebook|tiktok|youtube|website|zalo|email
+  format     String // SEO_ARTICLE|FANPAGE_CAPTION|VIDEO_SCRIPT|EMAIL|CARE_MESSAGE|CHATBOT_FAQ
+  topic      String
+  keyword    String      @default("")
+  objective  String      @default("Lead")
+  targetDate DateTime?
+  status     String      @default("PLANNED") // PLANNED|GENERATED|SCHEDULED|PUBLISHED|SKIPPED
+  draftId    String?
+  trendId    String?
+  orderIndex Int         @default(0)
+  createdAt  DateTime    @default(now())
 
   @@index([planId])
   @@index([status])
@@ -617,19 +647,19 @@ model ContentPlanItem {
 // deterministic render SPEC (brand template + resolved copy) so production is
 // not blocked and a human/designer or a later provider can render it.
 model GeneratedAsset {
-  id          String   @id @default(uuid())
-  draftId     String?
-  draft       ContentDraft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
-  kind        String // thumbnail|infographic|poster|short_video|image
-  templateId  String?
-  prompt      String   @default("")
-  spec        Json     @default("{}") // resolved brand-template render spec
-  status      String   @default("SPEC_READY") // SPEC_READY|RENDERING|RENDERED|FAILED
-  storageKey  String? // set when actually rendered by a provider
-  mimeType    String?
-  provider    String   @default("none")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String        @id @default(uuid())
+  draftId    String?
+  draft      ContentDraft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  kind       String // thumbnail|infographic|poster|short_video|image
+  templateId String?
+  prompt     String        @default("")
+  spec       Json          @default("{}") // resolved brand-template render spec
+  status     String        @default("SPEC_READY") // SPEC_READY|RENDERING|RENDERED|FAILED
+  storageKey String? // set when actually rendered by a provider
+  mimeType   String?
+  provider   String        @default("none")
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
   @@index([draftId])
   @@index([kind])
@@ -639,13 +669,13 @@ model GeneratedAsset {
 // Brand template definitions (thương hiệu) used to render visual assets
 // consistently: palette, fonts, logo placement, layout per asset kind.
 model BrandTemplate {
-  id         String   @id @default(uuid())
-  name       String   @unique
-  kind       String // thumbnail|infographic|poster|short_video
-  spec       Json     @default("{}") // colors, fonts, logo, layout slots
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(uuid())
+  name      String   @unique
+  kind      String // thumbnail|infographic|poster|short_video
+  spec      Json     @default("{}") // colors, fonts, logo, layout slots
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([kind])
   @@index([active])
@@ -772,7 +802,6 @@ model ActivityLog {
   @@index([createdAt]) // Req 2.3
 }
 
-
 // ===========================================================================
 // Omni-channel Intake + Partners/Destinations + Visa & Logistics (additive).
 //
@@ -809,22 +838,22 @@ enum IntakeDirection {
 // A per-contact conversation on a messaging channel. Holds the collected dossier
 // answers as JSON and the current question pointer for the intake flow engine.
 model IntakeConversation {
-  id             String        @id @default(uuid())
-  channel        IntakeChannel
-  externalUserId String // platform-scoped sender id (PSID / Zalo user id)
-  displayName    String?
-  flowKey        String        @default("xkld_default")
-  status         IntakeStatus  @default(ACTIVE)
+  id              String          @id @default(uuid())
+  channel         IntakeChannel
+  externalUserId  String // platform-scoped sender id (PSID / Zalo user id)
+  displayName     String?
+  flowKey         String          @default("xkld_default")
+  status          IntakeStatus    @default(ACTIVE)
   currentFieldKey String? // the field the bot is currently awaiting
-  collected      Json          @default("{}") // { fieldKey: value } structured answers
-  leadId         String? // linked Lead once created
-  candidateId    String? // linked CandidateProfile once promoted
-  assignedTo     String? // consultant userId after hand-off
-  lastInboundAt  DateTime?
-  lastOutboundAt DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  messages       IntakeMessage[]
+  collected       Json            @default("{}") // { fieldKey: value } structured answers
+  leadId          String? // linked Lead once created
+  candidateId     String? // linked CandidateProfile once promoted
+  assignedTo      String? // consultant userId after hand-off
+  lastInboundAt   DateTime?
+  lastOutboundAt  DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  messages        IntakeMessage[]
 
   @@unique([channel, externalUserId])
   @@index([status])
@@ -861,17 +890,17 @@ enum PartnerStatus {
 
 // A cooperating organization (đối tác đã hợp tác).
 model PartnerOrg {
-  id          String        @id @default(uuid())
+  id          String               @id @default(uuid())
   name        String
-  type        PartnerType   @default(EMPLOYER)
-  country     String        @default("") // market/country code (free-form, see markets.ts)
-  contactName String        @default("")
-  phone       String        @default("")
-  email       String        @default("")
-  status      PartnerStatus @default(ACTIVE)
-  notes       String        @default("")
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  type        PartnerType          @default(EMPLOYER)
+  country     String               @default("") // market/country code (free-form, see markets.ts)
+  contactName String               @default("")
+  phone       String               @default("")
+  email       String               @default("")
+  status      PartnerStatus        @default(ACTIVE)
+  notes       String               @default("")
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
   programs    DestinationProgram[]
 
   @@index([type])
@@ -888,32 +917,36 @@ enum DestinationStatus {
 // An export/study destination program with explicit eligibility conditions the
 // matching agent evaluates against a candidate's profile.
 model DestinationProgram {
-  id              String            @id @default(uuid())
-  name            String
-  country         String // market/country code (JAPAN|KOREA|GERMANY|TAIWAN|AUSTRALIA|...)
-  visaType        String            @default("") // free-form visa/program type
-  partnerId       String?
-  partner         PartnerOrg?       @relation(fields: [partnerId], references: [id])
-  minAge          Int?
-  maxAge          Int?
-  gender          String            @default("ANY") // ANY | MALE | FEMALE
-  requiredLanguage String           @default("") // e.g. "japanese" | "english" | ""
-  minLanguageLevel String           @default("") // e.g. N4 | IELTS5.5 | ""
-  budgetMinVndM   Int? // estimated cost floor (million VND)
-  budgetMaxVndM   Int?
+  id                    String            @id @default(uuid())
+  name                  String
+  country               String // market/country code (JAPAN|KOREA|GERMANY|TAIWAN|AUSTRALIA|...)
+  visaType              String            @default("") // free-form visa/program type
+  partnerId             String?
+  partner               PartnerOrg?       @relation(fields: [partnerId], references: [id])
+  minAge                Int?
+  maxAge                Int?
+  gender                String            @default("ANY") // ANY | MALE | FEMALE
+  requiredLanguage      String            @default("") // e.g. "japanese" | "english" | ""
+  minLanguageLevel      String            @default("") // e.g. N4 | IELTS5.5 | ""
+  budgetMinVndM         Int? // estimated cost floor (million VND)
+  budgetMaxVndM         Int?
   // --- Study-abroad financial fields (scholarship matching; additive) ---
-  tuitionPerYearVndM   Int? // học phí / năm (triệu VND)
+  tuitionPerYearVndM    Int? // học phí / năm (triệu VND)
   livingCostPerYearVndM Int? // sinh hoạt phí / năm (triệu VND)
-  scholarshipMaxPct    Int? // % học bổng tối đa có thể đạt (0..100)
-  minGpa               Float? // GPA tối thiểu (thang 10) để xét học bổng
-  minIelts             Float? // IELTS tối thiểu để xét học bổng
-  industries      Json              @default("[]") // string[]
-  conditions      Json              @default("[]") // free-form extra condition strings (shown to agent)
-  status          DestinationStatus @default(OPEN)
-  notes           String            @default("")
-  active          Boolean           @default(true)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  scholarshipMaxPct     Int? // % học bổng tối đa có thể đạt (0..100)
+  minGpa                Float? // GPA tối thiểu (thang 10) để xét học bổng
+  minIelts              Float? // IELTS tối thiểu để xét học bổng
+  // --- Study-abroad admissions thresholds (additive nullable; missing → no constraint on that axis) ---
+  minToefl              Int? // bổ sung nullable; thiếu → không ràng buộc chiều TOEFL
+  minJlpt               String? // bổ sung nullable; N5..N1
+  selectivityTier       String? // HIGH | MEDIUM | LOW; thiếu → coi như MEDIUM khi phân band
+  industries            Json              @default("[]") // string[]
+  conditions            Json              @default("[]") // free-form extra condition strings (shown to agent)
+  status                DestinationStatus @default(OPEN)
+  notes                 String            @default("")
+  active                Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
   @@index([country])
   @@index([status])
@@ -1010,7 +1043,6 @@ model LogisticsPlan {
   updatedAt     DateTime @updatedAt
 }
 
-
 // ===========================================================================
 // Study-abroad enhancements (additive): Financial & Scholarship matching, and
 // Behavior-based follow-up nurturing.
@@ -1048,4 +1080,257 @@ model FollowUpTask {
   @@index([status, dueAt])
   @@index([conversationId])
   @@index([externalUserId])
+}
+
+// ===========================================================================
+// Study-abroad AI advisor suite (additive) — admissions scoring + Reach/Match/
+// Safety banding, SOP/Essay/CV writing & review, visa interview prep, proactive
+// application timeline, and study→career→PR roadmap (ROI) + readiness.
+//
+// All models/enums below are additive and do not modify existing models/fields.
+// EssayStatus is reused by RoadmapNarrative (same REVIEW MODE lifecycle) to
+// avoid duplicating the enum.
+// ===========================================================================
+
+enum EssayDocType {
+  SOP
+  MOTIVATION
+  CV
+}
+
+enum EssayStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  ARCHIVED
+}
+
+enum ApplicationStatus {
+  PLANNING // đang chuẩn bị hồ sơ
+  SUBMITTED // đã nộp hồ sơ trường
+  OFFER // nhận offer
+  VISA // chuyển sang giai đoạn visa
+  ENROLLED // đã nhập học
+  WITHDRAWN
+  REJECTED
+}
+
+// Academic signals for admissions scoring — 1–1 with CandidateProfile. Cascade-
+// deleted with its CandidateProfile. All measurement fields nullable so missing
+// data is treated as INSUFFICIENT_DATA rather than fabricated.
+model AcademicProfile {
+  id             String           @id @default(uuid())
+  candidateId    String           @unique // 1–1 (Req 1.1)
+  candidate      CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  gpa            Float? // thang gpaScale
+  gpaScale       Float? // ví dụ 10 hoặc 4.0 (điều kiện tiên quyết chuẩn hóa > 0)
+  ielts          Float? // 0..9
+  toefl          Int? // 0..120
+  jlpt           String? // N5..N1
+  educationLevel String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([candidateId])
+}
+
+// A SOP / motivation letter / CV draft for a candidate. REVIEW MODE: always
+// created DRAFT and transitioned via the guarded Essay_State_Machine.
+model EssayDraft {
+  id          String           @id @default(uuid())
+  candidateId String
+  candidate   CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade) // Req 9.1, cascade
+  docType     EssayDocType // Req 6.1, 6.6
+  programId   String? // chương trình mục tiêu (tùy chọn)
+  content     String // nội dung bản nháp
+  aiGenerated Boolean          @default(false) // Req 20.1
+  status      EssayStatus      @default(DRAFT) // Req 6.5
+  approvedBy  String? // Req 8.4
+  approvedAt  DateTime? // Req 8.4
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+// A visa interview-prep session for a candidate. Snapshots candidate.assignedTo
+// at creation time for stable SALES assigned-only RBAC.
+model InterviewSession {
+  id                 String           @id @default(uuid())
+  candidateId        String
+  candidate          CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade) // Req 12.2
+  country            String
+  visaType           String           @default("")
+  questions          Json             @default("[]") // InterviewQuestion[]
+  answers            Json             @default("{}") // { questionCode: answer }
+  feedback           Json             @default("{}") // { questionCode: feedback }
+  score              Float? // ∈ [0,1] khi có
+  assignedAtCreation String? // snapshot candidate.assignedTo lúc TẠO (Req 12.3)
+  aiGenerated        Boolean          @default(false) // Req 20.1
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([candidateId])
+}
+
+// A program application case for a candidate with its own due-item checklist.
+// Timeline_Computer merges ApplicationDueItem with VisaTask across all cases.
+model ApplicationCase {
+  id               String               @id @default(uuid())
+  candidateId      String
+  candidate        CandidateProfile     @relation(fields: [candidateId], references: [id], onDelete: Cascade) // Req 13.2
+  programId        String? // gắn DestinationProgram (Req 13.1)
+  intakeLabel      String // ví dụ "Fall 2025"
+  targetIntakeDate DateTime? // null → due-item hạn chưa xác định (Req 13.4)
+  status           ApplicationStatus    @default(PLANNING)
+  visaCaseId       String? // soft link tới VisaCase (Req 13.2)
+  createdBy        String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  dueItems         ApplicationDueItem[]
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+model ApplicationDueItem {
+  id        String          @id @default(uuid())
+  caseId    String
+  case      ApplicationCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  code      String // mã việc (từ visaCatalog hoặc CUSTOM)
+  label     String
+  category  String          @default("DOCUMENT") // VisaTaskCategory-compatible
+  required  Boolean         @default(true)
+  dueAt     DateTime? // null = hạn chưa xác định (Req 13.4)
+  status    String          @default("PENDING") // PENDING|IN_PROGRESS|DONE|BLOCKED
+  done      Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([caseId])
+  @@index([dueAt])
+}
+
+// Dedup ledger making reminder creation idempotent at the DB level: each
+// Due_Item gets exactly one Reminder per reminder window while pending.
+model ReminderLog {
+  id             String   @id @default(uuid())
+  dueItemId      String // id ApplicationDueItem | VisaTask
+  dueItemType    String   @default("APPLICATION") // APPLICATION | VISA
+  windowKey      String // khóa cửa sổ nhắc xác định (ví dụ "2025-08-01")
+  status         String   @default("PENDING") // PENDING | RESOLVED | CANCELLED (Req 15.2, 15.3)
+  notificationId String? // Notification đã tạo (nếu có)
+  createdAt      DateTime @default(now())
+
+  @@unique([dueItemId, windowKey]) // ràng buộc lũy đẳng (Req 15.2, 15.4)
+  @@index([status])
+}
+
+// A study→career→PR roadmap narrative (ROI estimate + human-readable text).
+// REVIEW MODE: reuses EssayStatus lifecycle so all narratives are approved
+// before being treated as official.
+model RoadmapNarrative {
+  id          String           @id @default(uuid())
+  candidateId String
+  candidate   CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  programId   String?
+  estimate    Json // RoadmapEstimate đã serialize
+  narrative   String // bản tường thuật
+  aiGenerated Boolean          @default(false) // Req 20.1
+  status      EssayStatus      @default(DRAFT) // REVIEW MODE (Req 17.3)
+  approvedBy  String?
+  approvedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+// ===========================================================================
+// Privacy, consent & webhook-replay protection (additive, security hardening).
+//
+// Three additive models close gaps surfaced in a security review:
+//  1. WebhookDelivery — a replay ledger. Every accepted inbound webhook records
+//     its (source, deliveryId) so a re-POSTed payload (captured signature) is
+//     rejected as a duplicate even though the HMAC still verifies.
+//  2. ConsentRecord — an append-only consent ledger for a data subject (lead /
+//     candidate / intake contact), including explicit cross-border AI-transfer
+//     consent. Withdrawals are new rows (never updates) so history is preserved.
+//  3. ErasureRequest — a right-to-erasure (GDPR Art.17 style) request + its
+//     processing outcome, so PII deletion is auditable.
+// None modify existing models/fields.
+// ===========================================================================
+
+/// Inbound webhook replay ledger. (source, deliveryId) is unique so a replayed
+/// delivery (same captured signature + body) is detected and rejected.
+model WebhookDelivery {
+  id          String   @id @default(uuid())
+  source      String // 'lead:facebook' | 'lead:website' | 'intake:facebook' | 'intake:zalo'
+  deliveryId  String // provider delivery/event id, or a content hash fallback
+  signature   String? // truncated signature fingerprint (NOT the secret) for forensics
+  receivedAt  DateTime @default(now())
+
+  @@unique([source, deliveryId])
+  @@index([receivedAt])
+}
+
+enum ConsentSubjectType {
+  LEAD
+  CANDIDATE
+  INTAKE
+}
+
+enum ConsentScope {
+  DATA_PROCESSING // store + process personal data for consulting
+  MARKETING // send marketing / follow-up messages
+  CROSS_BORDER_AI // transfer content to overseas AI providers (DeepSeek/Gemini/VEO)
+}
+
+enum ConsentAction {
+  GRANTED
+  WITHDRAWN
+}
+
+/// Append-only consent ledger. A withdrawal is a NEW row (action=WITHDRAWN), so
+/// the effective consent for a (subject, scope) is the most recent row.
+model ConsentRecord {
+  id          String             @id @default(uuid())
+  subjectType ConsentSubjectType
+  subjectId   String // Lead.leadId | CandidateProfile.id | IntakeConversation.id
+  scope       ConsentScope
+  action      ConsentAction      @default(GRANTED)
+  source      String             @default("") // how consent was captured (form/webhook/chat)
+  note        String?
+  actor       String             @default("system") // userId or 'system'/'self'
+  recordedAt  DateTime           @default(now())
+
+  @@index([subjectType, subjectId])
+  @@index([scope])
+  @@index([recordedAt])
+}
+
+enum ErasureStatus {
+  REQUESTED
+  COMPLETED
+  REJECTED
+}
+
+/// Right-to-erasure request + outcome (auditable PII deletion).
+model ErasureRequest {
+  id           String        @id @default(uuid())
+  subjectType  ConsentSubjectType
+  subjectId    String
+  status       ErasureStatus @default(REQUESTED)
+  reason       String        @default("")
+  requestedBy  String // userId who lodged the request
+  processedBy  String? // userId who executed it
+  // Summary of what was erased (counts only — NEVER the erased PII values).
+  erasedSummary Json         @default("{}")
+  requestedAt  DateTime      @default(now())
+  processedAt  DateTime?
+
+  @@index([subjectType, subjectId])
+  @@index([status])
 }

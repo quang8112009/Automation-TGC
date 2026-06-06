@@ -101,7 +101,7 @@ export class UserManagementService {
     await this.requireUser(userId);
     const user = await this.prisma.userAccount.update({
       where: { id: userId },
-      data: { locked: false, lockedAt: null, failedLoginCount: 0 },
+      data: { locked: false, lockedAt: null, lockedUntil: null, failedLoginCount: 0 },
     });
     return toManagedUserView(user);
   }

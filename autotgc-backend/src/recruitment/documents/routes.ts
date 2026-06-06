@@ -15,9 +15,13 @@
  *   - The item-scoped status route (`/api/v1/documents/:itemId/status`) resolves
  *     the owning candidate's `assignedTo` from the checklist item so the same
  *     assigned-only policy applies. (Req 13.6)
- *   - The catalog routes are ADMIN-only: GET uses 'lead_management'/'read' and
- *     PUT uses 'settings'/'update' — both deny SALES under the existing pure
- *     RBAC policy, so no policy-table change is needed.
+ *   - The catalog routes are gated by the fine-grained 'document_catalog'
+ *     module: GET uses 'document_catalog'/'read' and PUT uses
+ *     'document_catalog'/'update'. SALES is granted both under the revised RBAC
+ *     policy (Req 1.4, 1.5) while ADMIN keeps full access; this keeps the
+ *     broader 'settings' surface ADMIN-only. A successful PUT appends a
+ *     metadata-only 'DOCUMENT_CATALOG_UPDATED' audit record via the central
+ *     oversight emit point (best-effort, Req 7.1, 7.4).
  *
  * Uses the `/api/v1` gateway prefix. All routes mount behind requireAuth +
  * rbacGuard. This file is additive; `app.ts` wiring is task 9.1.
@@ -110,10 +114,13 @@ export async function registerDocumentRoutes(
       };
     });
 
-  // Catalog routes are ADMIN-only. GET maps to lead_management/read and PUT to
-  // settings/update; both deny SALES under the existing pure RBAC policy.
-  const catalogReadGuard = rbacGuard(() => ({ module: 'lead_management', action: 'read' }));
-  const catalogUpdateGuard = rbacGuard(() => ({ module: 'settings', action: 'update' }));
+  // Catalog routes are gated by the fine-grained `document_catalog` module so
+  // SALES can manage the per-market default doc set (Req 1.4, 1.5) without
+  // gaining the broader `settings` surface (partners-write, privacy/GDPR). GET
+  // maps to document_catalog/read and PUT to document_catalog/update; ADMIN
+  // keeps full access via the pure RBAC policy.
+  const catalogReadGuard = rbacGuard(() => ({ module: 'document_catalog', action: 'read' }));
+  const catalogUpdateGuard = rbacGuard(() => ({ module: 'document_catalog', action: 'update' }));
 
   // ---- Candidate document checklist -----------------------------------------
   // GET /api/v1/candidates/:id/documents — list items + completion metric.
@@ -177,8 +184,7 @@ export async function registerDocumentRoutes(
 
   // ---- Document type catalog (ADMIN) ----------------------------------------
   // GET /api/v1/document-catalog/:market — read the default doc set.
-  // Per the design's API table this is an ADMIN configuration surface; the
-  // GET guard maps to lead_management/read.
+  // document_catalog/read (ADMIN + SALES under the revised policy).
   app.get(
     '/api/v1/document-catalog/:market',
     { preHandler: [auth, catalogReadGuard] },
@@ -190,7 +196,7 @@ export async function registerDocumentRoutes(
   );
 
   // PUT /api/v1/document-catalog/:market — update the default doc set. Does NOT
-  // touch existing checklist items. settings/update (ADMIN-only).
+  // touch existing checklist items. document_catalog/update (ADMIN + SALES).
   app.put(
     '/api/v1/document-catalog/:market',
     { preHandler: [auth, catalogUpdateGuard] },
@@ -199,6 +205,20 @@ export async function registerDocumentRoutes(
       const body = (request.body ?? {}) as Record<string, unknown>;
       const docs = (body.docs ?? []) as DocTypeDef[];
       const updated = await catalogService.update(market, docs);
+
+      // After the catalog write commits, append a metadata-only audit record via
+      // the central oversight emit point (best-effort; never blocks/breaks the
+      // response). Detail carries no document contents — only the market and the
+      // number of docs in the updated set (Req 7.1, 7.4).
+      const actor = getAuth(request);
+      await deps.oversight?.record({
+        actorUserId: actor.userId,
+        action: 'DOCUMENT_CATALOG_UPDATED',
+        targetType: 'document_catalog',
+        targetId: market,
+        detail: { market, docCount: updated.length },
+      });
+
       return reply.code(200).send({ market, docs: updated });
     },
   );

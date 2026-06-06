@@ -12,9 +12,17 @@ import type { ContentPersona, PrismaClient } from '@prisma/client';
 import { NotFoundError, ValidationError } from '../infra/errors';
 import { isRecord, asString } from '../platforms/narrow';
 
+/** Optional generation tuning passed per-call (all fields optional). */
+export interface GenerateOptions {
+  /** Upper bound on output tokens; caps worst-case generation time. */
+  maxTokens?: number;
+  /** Sampling temperature (provider default when omitted). */
+  temperature?: number;
+}
+
 /** Text generator seam (GeminiClient satisfies this structurally). */
 export interface ContentGenerator {
-  generateContent(prompt: string): Promise<string>;
+  generateContent(prompt: string, options?: GenerateOptions): Promise<string>;
 }
 
 /** Persona attributes that may be supplied or recommended. */

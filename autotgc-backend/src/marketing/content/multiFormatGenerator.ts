@@ -106,6 +106,15 @@ export interface MultiFormatResult {
   generatedWithoutFeedback: boolean;
 }
 
+/** Internal: everything prepared before the AI call (no writes performed yet). */
+interface PreparedGeneration {
+  validated: ValidatedMultiFormatRequest;
+  domainId: string;
+  personaId: string;
+  generatedWithoutFeedback: boolean;
+  prompt: string;
+}
+
 /** Format-specific expert role (Vietnamese), embedded in the directive segment. */
 const FORMAT_ROLE: Record<ContentFormat, string> = {
   GENERIC: 'chuyên gia copywriting marketing nội dung',
@@ -295,13 +304,27 @@ function extractFormatExtras(
   };
 }
 
-/** Mirror of generationService's (private) CTA extractor. */
+/** Mirror of generationService's (private) CTA extractor. Tolerant of CTA
+ *  OBJECTS ({text,url,type}) the model often returns instead of plain strings. */
 function extractCtas(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value.map((c) => asString(c)).filter((c): c is string => c !== undefined);
+    return value.map((c) => ctaToString(c)).filter((c): c is string => c !== undefined);
   }
-  const single = asString(value);
+  const single = ctaToString(value);
   return single ? [single] : [];
+}
+
+/** Coerce one CTA entry (string OR object) to its human-facing label string. */
+function ctaToString(value: unknown): string | undefined {
+  const direct = asString(value);
+  if (direct !== undefined) return direct;
+  if (isRecord(value)) {
+    for (const key of ['text', 'label', 'cta', 'title', 'name', 'value']) {
+      const s = asString(value[key]);
+      if (s !== undefined) return s;
+    }
+  }
+  return undefined;
 }
 
 /** Narrow an unknown to a trimmed, non-empty string array. */
@@ -375,9 +398,56 @@ export class MultiFormatGenerator {
    * planItemId / seoKeywords and returns it.
    */
   async generate(req: MultiFormatRequest): Promise<MultiFormatResult> {
+    const prep = await this.prepare(req);
+    // Generation never fabricates: rethrow Gemini failures, persist nothing.
+    // Cap output tokens per-format so short formats finish fast (lower latency).
+    const text = await this.gemini.generateContent(prep.prompt, {
+      maxTokens: FORMAT_META[prep.validated.format].maxTokens,
+    });
+    return this.persist(prep, text);
+  }
+
+  /**
+   * Streaming variant: identical validation / lookups / prompt / persistence as
+   * {@link generate}, but the model text is streamed. `onDelta` is invoked for
+   * each user-facing content chunk as it arrives (so the caller can forward it
+   * to an SSE client); once the stream completes the full text is parsed and a
+   * DRAFT is persisted EXACTLY as the non-streaming path. Requires the injected
+   * generator to support `streamContent` (the real AiTextClient does); callers
+   * that pass a non-streaming generator should use {@link generate} instead.
+   */
+  async generateStreaming(
+    req: MultiFormatRequest,
+    onDelta: (chunk: string) => void,
+  ): Promise<MultiFormatResult> {
+    const streamer = this.gemini as ContentGenerator & {
+      streamContent?: (
+        prompt: string,
+        onDelta: (chunk: string) => void,
+        options?: { maxTokens?: number; temperature?: number },
+      ) => Promise<string>;
+    };
+    const prep = await this.prepare(req);
+    const maxTokens = FORMAT_META[prep.validated.format].maxTokens;
+
+    let text: string;
+    if (typeof streamer.streamContent === 'function') {
+      text = await streamer.streamContent(prep.prompt, onDelta, { maxTokens });
+    } else {
+      // Fallback: no streaming support — generate normally (no deltas emitted).
+      text = await this.gemini.generateContent(prep.prompt, { maxTokens });
+    }
+    return this.persist(prep, text);
+  }
+
+  /**
+   * Shared prep for generate/generateStreaming: validate (400), resolve domain +
+   * personas (404), cold-start-safe context load, and build the prompt. Performs
+   * NO AI call and NO writes.
+   */
+  private async prepare(req: MultiFormatRequest): Promise<PreparedGeneration> {
     const validated = this.validate(req);
 
-    // Same lookups GenerationService.generate performs.
     const domain = await this.prisma.domainContext.findUnique({
       where: { domainName: validated.domainName },
     });
@@ -391,7 +461,6 @@ export class MultiFormatGenerator {
       throw new NotFoundError('No matching personas found', 'GEN_PERSONA_NOT_FOUND');
     }
 
-    // Cold-start safe: never throw if context is missing/empty.
     let ctx: PerformanceContext | null = null;
     try {
       ctx = await this.aiContextReader.get();
@@ -421,9 +490,6 @@ export class MultiFormatGenerator {
       seoKeywords: validated.seoKeywords,
     };
 
-    // Brand-knowledge grounding (optional, non-breaking): fetched BEFORE the
-    // prompt is built and passed in, so buildFormatPrompt stays pure. The
-    // provider never throws; an empty/absent block leaves the prompt unchanged.
     let grounding: string | undefined;
     if (this.brandKnowledge) {
       grounding = await this.brandKnowledge.groundingBlock({
@@ -435,12 +501,14 @@ export class MultiFormatGenerator {
     }
 
     const prompt = buildFormatPrompt(validated.format, inputs, complete ? ctx : null, grounding);
+    return { validated, domainId: domain.id, personaId: personas[0].id, generatedWithoutFeedback, prompt };
+  }
 
-    // Generation never fabricates: rethrow Gemini failures, persist nothing.
-    const text = await this.gemini.generateContent(prompt);
+  /** Shared persistence for generate/generateStreaming: parse + persist DRAFT. */
+  private async persist(prep: PreparedGeneration, text: string): Promise<MultiFormatResult> {
+    const { validated } = prep;
     const parsed = parseFormatContent(validated.format, text);
 
-    // Persist SEO keywords from the model output when present, else the request's.
     const keywords = parsed.keywords.length > 0 ? parsed.keywords : validated.seoKeywords;
     const seoKeywords: Prisma.InputJsonValue = JSON.parse(
       JSON.stringify(keywords),
@@ -448,8 +516,8 @@ export class MultiFormatGenerator {
 
     const draft = await this.prisma.contentDraft.create({
       data: {
-        domainId: domain.id,
-        personaId: personas[0].id,
+        domainId: prep.domainId,
+        personaId: prep.personaId,
         objective: validated.objective,
         title: parsed.title,
         body: parsed.body,
@@ -459,12 +527,17 @@ export class MultiFormatGenerator {
         language: 'vi',
         planItemId: validated.planItemId ?? null,
         seoKeywords,
-        generatedWithoutFeedback,
+        generatedWithoutFeedback: prep.generatedWithoutFeedback,
         ctas: { create: parsed.ctas.map((ctaText) => ({ ctaText })) },
       },
       include: { ctas: true },
     });
 
-    return { draft, format: validated.format, aiGenerated: true, generatedWithoutFeedback };
+    return {
+      draft,
+      format: validated.format,
+      aiGenerated: true,
+      generatedWithoutFeedback: prep.generatedWithoutFeedback,
+    };
   }
 }

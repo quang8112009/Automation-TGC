@@ -8,7 +8,7 @@ import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastif
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService, Role } from '../auth/jwt';
 import { authorize } from '../auth/rbac';
-import type { AuthContext, ResourceTarget } from '../auth/rbac';
+import type { Action, AuthContext, Module, ResourceTarget } from '../auth/rbac';
 import { ForbiddenError, UnauthorizedError } from '../infra/errors';
 import { REALTIME_PUBLIC_PATHS } from '../realtime';
 import { API_INFO_PUBLIC_PATHS } from './apiInfo';
@@ -118,16 +118,40 @@ export type TargetBuilder = (
   reply: FastifyReply,
 ) => ResourceTarget | undefined | Promise<ResourceTarget | undefined>;
 
-export function rbacGuard(build: TargetBuilder): preHandlerHookHandler {
+/**
+ * Best-effort audit sink for denied authorization decisions (Req 7.2, 7.3).
+ * Implementations MUST be fire-and-forget: swallow their own errors and never
+ * block or fail the response. Kept out of `auth/rbac.ts` so policy evaluation
+ * stays pure; injected at `app.ts` from an auditor wrapping ActivityLogger.
+ */
+export interface RbacAuditor {
+  recordDenied(input: {
+    actorUserId: string;
+    module: Module;
+    action: Action;
+    targetId?: string;
+  }): void;
+}
+
+export function rbacGuard(build: TargetBuilder, auditor?: RbacAuditor): preHandlerHookHandler {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const auth = getAuth(request);
     const target = await build(request, reply);
     if (!target) {
+      // No resolvable target (e.g. unassigned / not-found owner) → fail-closed 403.
+      // We have no module/action here, so use a safe lead_management/read fallback.
+      auditor?.recordDenied({ actorUserId: auth.userId, module: 'lead_management', action: 'read' });
       throw new ForbiddenError();
     }
     const ctx: AuthContext = { userId: auth.userId, role: auth.role };
     const decision = authorize(ctx, target);
     if (!decision.allowed) {
+      auditor?.recordDenied({
+        actorUserId: auth.userId,
+        module: target.module,
+        action: target.action,
+        targetId: target.ownerUserId,
+      });
       throw new ForbiddenError();
     }
   };

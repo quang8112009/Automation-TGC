@@ -1,0 +1,110 @@
+# AutoTGC CI Pipeline
+#
+# Runs on every push and pull request targeting main or feature branches.
+# Stages:
+#   1. Backend: install → Prisma generate → typecheck → test
+#   2. Frontend: install → typecheck
+#   3. Lint placeholder (see note below)
+#
+# NOTE — ESLint is not yet configured in the project. The backend's
+# `package.json` has a `lint` script (`eslint \"src/**/*.ts\"`) but neither
+# eslint nor any config file is installed. Once eslint is added as a
+# devDependency and an `.eslintrc.*` config exists, uncomment the lint job
+# below to enable it.
+
+name: CI
+
+on:
+  push:
+    branches: [main, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ── Backend: typecheck + test ─────────────────────────────────────────
+  backend:
+    name: Backend (typecheck + test)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: autotgc-backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: autotgc-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          # prisma generate reads the schema only; a real DATABASE_URL is
+          # not required unless we run migrations in CI (which we don't).
+          DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci'
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+  # ── Frontend: typecheck ───────────────────────────────────────────────
+  frontend:
+    name: Frontend (typecheck)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: autotgc-frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: autotgc-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  # ── Lint (disabled until eslint is configured) ────────────────────────
+  # lint:
+  #   name: Lint (backend)
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: autotgc-backend
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: ${{ env.NODE_VERSION }}
+  #         cache: 'npm'
+  #         cache-dependency-path: autotgc-backend/package-lock.json
+  #     - run: npm ci
+  #     - run: npm run lint

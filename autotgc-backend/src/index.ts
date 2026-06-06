@@ -45,60 +45,81 @@ async function main(): Promise<void> {
   const prisma = getPrisma();
 
   const services = composeServices(prisma, loader);
-  const app = await buildApp(config, { prisma, jwt, redact: loader.redact, services, logger });
+  const runMode = config.runMode;
+  const runsWorkers = runMode === 'all' || runMode === 'worker';
+  const runsApi = runMode === 'all' || runMode === 'api';
+  logger.info(`Process RUN_MODE=${runMode} (api=${runsApi}, workers/cron=${runsWorkers})`);
+
+  // The HTTP app is always built (cheap) but only listens when this process
+  // serves the API. The 'worker' process builds nothing it doesn't need.
+  const app = runsApi
+    ? await buildApp(config, { prisma, jwt, redact: loader.redact, services, logger })
+    : undefined;
 
   // Seed internal service accounts (idempotent) before starting workers.
-  try {
-    const { ServiceAccountService } = await import('./auth/serviceAccountService');
-    await new ServiceAccountService(prisma).ensureSeeded(loader);
-    logger.info('Service accounts seeded');
-  } catch (err) {
-    logger.error(`Service-account seeding failed: ${(err as Error).message}`);
+  // Only one process should seed; the worker process owns it (or 'all').
+  if (runsWorkers) {
+    try {
+      const { ServiceAccountService } = await import('./auth/serviceAccountService');
+      await new ServiceAccountService(prisma).ensureSeeded(loader);
+      logger.info('Service accounts seeded');
+    } catch (err) {
+      logger.error(`Service-account seeding failed: ${(err as Error).message}`);
+    }
   }
 
-  // Start BullMQ workers (publish + score) when Redis is configured.
+  // Start BullMQ workers (publish + score) when Redis is configured — ONLY in a
+  // worker-bearing process, so heavy queue work never blocks the API event loop.
   let stopWorkers: (() => Promise<void>) | undefined;
-  try {
-    const { startPublishWorker, startScoreWorker, closeWorkers } = await import('./queues/workers');
-    startPublishWorker({
-      redisUrl: config.redisUrl,
-      prisma,
-      registry: services.registry,
-      tokenManager: services.tokenManager,
-      alerts: services.alerts,
-    });
-    startScoreWorker({ redisUrl: config.redisUrl, prisma });
-    stopWorkers = closeWorkers;
-    logger.info('BullMQ workers started (publish, score)');
-  } catch (err) {
-    logger.error(`Failed to start queue workers: ${(err as Error).message}`);
+  if (runsWorkers) {
+    try {
+      const { startPublishWorker, startScoreWorker, closeWorkers } = await import('./queues/workers');
+      startPublishWorker({
+        redisUrl: config.redisUrl,
+        prisma,
+        registry: services.registry,
+        tokenManager: services.tokenManager,
+        alerts: services.alerts,
+      });
+      startScoreWorker({ redisUrl: config.redisUrl, prisma });
+      stopWorkers = closeWorkers;
+      logger.info('BullMQ workers started (publish, score)');
+    } catch (err) {
+      logger.error(`Failed to start queue workers: ${(err as Error).message}`);
+    }
   }
 
-  // Start scheduled automation (token refresh 12h, analytics collection 6h,
-  // publishing due-scan every minute, weekly feedback Sun 00:00). A failure to
-  // start jobs is logged but must not block the API from serving.
+  // Start scheduled automation — ONLY in a worker-bearing process. Running cron
+  // in the API process is what caused node-cron "missed execution" warnings when
+  // a slow AI call or queue job blocked the shared event loop.
   let scheduler: ReturnType<typeof startScheduledJobs> | undefined;
-  try {
-    scheduler = startScheduledJobs({
-      prisma,
-      secrets: loader,
-      logger,
-      registry: services.registry,
-      tokenManager: services.tokenManager,
-      alerts: services.alerts,
-      redisUrl: config.redisUrl,
-    });
-  } catch (err) {
-    logger.error(`Failed to start scheduled jobs: ${(err as Error).message}`);
+  if (runsWorkers) {
+    try {
+      scheduler = startScheduledJobs({
+        prisma,
+        secrets: loader,
+        logger,
+        registry: services.registry,
+        tokenManager: services.tokenManager,
+        alerts: services.alerts,
+        redisUrl: config.redisUrl,
+      });
+    } catch (err) {
+      logger.error(`Failed to start scheduled jobs: ${(err as Error).message}`);
+    }
   }
 
-  try {
-    await app.listen({ host: config.host, port: config.port });
-    logger.info(`AutoTGC backend started on ${config.host}:${config.port} (env=${config.nodeEnv})`);
-  } catch (err) {
-    logger.error(`Failed to start server: ${(err as Error).message}`);
-    process.exit(1);
-    return;
+  if (app) {
+    try {
+      await app.listen({ host: config.host, port: config.port });
+      logger.info(`AutoTGC backend started on ${config.host}:${config.port} (env=${config.nodeEnv})`);
+    } catch (err) {
+      logger.error(`Failed to start server: ${(err as Error).message}`);
+      process.exit(1);
+      return;
+    }
+  } else {
+    logger.info('Worker process ready (no HTTP listener in RUN_MODE=worker)');
   }
 
   const shutdown = async (signal: string): Promise<void> => {
@@ -106,7 +127,7 @@ async function main(): Promise<void> {
     try {
       scheduler?.stop();
       if (stopWorkers) await stopWorkers();
-      await app.close();
+      if (app) await app.close();
       await prisma.$disconnect();
       logger.info('Shutdown complete');
       process.exit(0);

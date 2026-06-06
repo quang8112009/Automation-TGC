@@ -48,7 +48,7 @@ export function Register() {
       <form className="auth-card" onSubmit={onSubmit}>
         <h1>Tạo tài khoản</h1>
         <p className="auth-sub">Đăng ký người dùng ADMIN mới</p>
-        {error != null && <ErrorMessage error={error} />}
+        <div aria-live="polite">{error != null && <ErrorMessage error={error} />}</div>
         <div className="field">
           <label htmlFor="username">Tên đăng nhập</label>
           <input

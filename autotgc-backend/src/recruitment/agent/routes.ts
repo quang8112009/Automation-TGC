@@ -3,9 +3,11 @@
  * (customer: Thanh Giang Conincon). Thin layer: shapes requests/responses,
  * wires auth + RBAC, and delegates to RecruitmentConsultantAgent / KnowledgeService.
  *
- * RBAC: the consult/draft + knowledge routes are behind requireAuth + rbacGuard
+ * RBAC: the consult/draft/suggest routes are behind requireAuth + rbacGuard
  * with module 'generation' (ADMIN-only by current policy — SALES is denied on
- * the generation module). The Work_Assistant route (/api/v1/ai/assistant) is
+ * the generation module). The Knowledge_Base management routes use the
+ * fine-grained 'knowledge_base' module so SALES can maintain reference material
+ * (read/create/update). The Work_Assistant route (/api/v1/ai/assistant) is
  * mapped to module 'dashboard'/'read' so BOTH ADMIN and SALES can reach it; its
  * role-based business-data scoping is enforced inside WorkAssistant.
  *
@@ -20,6 +22,7 @@ import type { JwtService } from '../../auth/jwt';
 import type { ContentGenerator } from '../../strategy/personaService';
 import { requireAuth, rbacGuard, getAuth } from '../../http/authMiddleware';
 import { NotFoundError, ValidationError } from '../../infra/errors';
+import type { OversightService } from '../../oversight/oversightService';
 import { KnowledgeService } from '../knowledge/knowledgeService';
 import { RecruitmentConsultantAgent } from './consultantAgent';
 import type { CandidateContext } from './consultantAgent';
@@ -30,6 +33,10 @@ export interface RecruitmentAgentRouteDeps {
   jwt: JwtService;
   /** Optional Gemini seam; when absent the agent uses grounded fallbacks. */
   gemini?: ContentGenerator;
+  /** Central oversight emit point; when present, successful Knowledge_Base
+   * management actions (create/update/deactivate) append one best-effort
+   * ActivityLog record (Req 7.1). App wiring is task 10.1. */
+  oversight?: OversightService;
 }
 
 interface IdParams {
@@ -68,17 +75,24 @@ export function registerRecruitmentAgentRoutes(
   app: FastifyInstance,
   deps: RecruitmentAgentRouteDeps,
 ): void {
-  const { prisma, jwt, gemini } = deps;
+  const { prisma, jwt, gemini, oversight } = deps;
   const knowledge = new KnowledgeService(prisma);
   const agent = new RecruitmentConsultantAgent(knowledge, gemini);
   const assistant = new WorkAssistant(knowledge, gemini);
   const auth = requireAuth({ prisma, jwt });
 
-  // The consultant + knowledge-admin routes use the 'generation' module
-  // (ADMIN-only policy; SALES is denied).
-  const genRead = rbacGuard(() => ({ module: 'generation', action: 'read' }));
+  // The consultant routes use the 'generation' module (ADMIN-only policy;
+  // SALES is denied).
   const genCreate = rbacGuard(() => ({ module: 'generation', action: 'create' }));
-  const genUpdate = rbacGuard(() => ({ module: 'generation', action: 'update' }));
+
+  // The Knowledge_Base management routes use the fine-grained 'knowledge_base'
+  // module (SALES is granted read/create/update; ADMIN is allowed everywhere).
+  // This replaces the previous 'generation' guards so SALES can maintain the
+  // reference material (Req 1.6–1.9). Deactivation is a PUT with `active:false`,
+  // i.e. still the 'update' action.
+  const kbRead = rbacGuard(() => ({ module: 'knowledge_base', action: 'read' }));
+  const kbCreate = rbacGuard(() => ({ module: 'knowledge_base', action: 'create' }));
+  const kbUpdate = rbacGuard(() => ({ module: 'knowledge_base', action: 'update' }));
 
   // The Work_Assistant must be reachable by BOTH ADMIN and SALES (Req 6 covers
   // all authenticated employees). The RBAC policy in `auth/rbac.ts` denies SALES
@@ -212,7 +226,7 @@ export function registerRecruitmentAgentRoutes(
   // ---- Knowledge base management --------------------------------------------
   app.get(
     '/api/v1/knowledge',
-    { preHandler: [auth, genRead] },
+    { preHandler: [auth, kbRead] },
     async (request, reply) => {
       const q = (request.query ?? {}) as Record<string, unknown>;
       const entries = await knowledge.list(asString(q.category), asString(q.market));
@@ -222,7 +236,7 @@ export function registerRecruitmentAgentRoutes(
 
   app.post(
     '/api/v1/knowledge',
-    { preHandler: [auth, genCreate] },
+    { preHandler: [auth, kbCreate] },
     async (request, reply) => {
       const body = (request.body ?? {}) as Record<string, unknown>;
       const category = asString(body.category);
@@ -239,13 +253,24 @@ export function registerRecruitmentAgentRoutes(
         tags: asStringArray(body.tags) ?? [],
         market: asString(body.market) ?? null,
       });
+
+      // Best-effort audit (Req 7.1, 7.4): metadata only, never secrets.
+      const actor = getAuth(request);
+      await oversight?.record({
+        actorUserId: actor.userId,
+        action: 'KNOWLEDGE_CREATED',
+        targetType: 'knowledge_entry',
+        targetId: entry.id,
+        detail: { category: entry.category, title: entry.title, active: entry.active },
+      });
+
       return reply.code(201).send(entry);
     },
   );
 
   app.put(
     '/api/v1/knowledge/:id',
-    { preHandler: [auth, genUpdate] },
+    { preHandler: [auth, kbUpdate] },
     async (request, reply) => {
       const { id } = request.params as IdParams;
       const body = (request.body ?? {}) as Record<string, unknown>;
@@ -265,6 +290,19 @@ export function registerRecruitmentAgentRoutes(
       }
 
       const entry = await knowledge.update(id, patch);
+
+      // A PUT that sets `active:false` is a deactivation; any other write is an
+      // update. Audit best-effort with metadata only (Req 7.1, 7.4).
+      const deactivated = body.active === false;
+      const actor = getAuth(request);
+      await oversight?.record({
+        actorUserId: actor.userId,
+        action: deactivated ? 'KNOWLEDGE_DEACTIVATED' : 'KNOWLEDGE_UPDATED',
+        targetType: 'knowledge_entry',
+        targetId: entry.id,
+        detail: { category: entry.category, title: entry.title, active: entry.active },
+      });
+
       return reply.code(200).send(entry);
     },
   );

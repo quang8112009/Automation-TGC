@@ -26,6 +26,34 @@ declare module 'fastify' {
 
 const REQUEST_ID_HEADER = 'x-request-id';
 
+/**
+ * Redact sensitive query-string values from a URL before it is logged.
+ * The realtime transports (SSE/WebSocket) accept a `?access_token=` JWT because
+ * EventSource/browser WebSocket cannot set headers; logging the raw URL would
+ * leak that bearer token into access logs. We replace the value of any
+ * sensitive param with `[REDACTED]` while preserving the path + other params.
+ */
+const SENSITIVE_QUERY_PARAMS: readonly string[] = ['access_token', 'token', 'refresh_token'];
+
+export function redactUrl(url: string): string {
+  const qIndex = url.indexOf('?');
+  if (qIndex === -1) return url;
+  const path = url.slice(0, qIndex);
+  const query = url.slice(qIndex + 1);
+  const redacted = query
+    .split('&')
+    .map((pair) => {
+      const eq = pair.indexOf('=');
+      const key = eq === -1 ? pair : pair.slice(0, eq);
+      if (SENSITIVE_QUERY_PARAMS.includes(key.toLowerCase())) {
+        return `${key}=[REDACTED]`;
+      }
+      return pair;
+    })
+    .join('&');
+  return `${path}?${redacted}`;
+}
+
 function resolveIncomingId(raw: string | string[] | undefined): string {
   if (Array.isArray(raw)) {
     const first = raw[0];
@@ -57,11 +85,13 @@ export function registerRequestId(app: FastifyInstance, logger?: RequestLogger):
     const sink: RequestLogger | undefined = accessLog ?? (request.log as RequestLogger | undefined);
     if (!sink) return;
     // Deliberately omit headers (incl. Authorization) and bodies from the log entry.
+    // The URL is redacted so a `?access_token=` JWT (realtime transports) never
+    // lands in access logs.
     sink.info(
       {
         requestId: request.requestId,
         method: request.method,
-        url: request.url,
+        url: redactUrl(request.url),
         statusCode: reply.statusCode,
         responseTime: reply.elapsedTime,
       },

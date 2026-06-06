@@ -121,7 +121,7 @@ export function DocumentCatalog() {
         </div>
       </div>
 
-      <div className="notice" style={{ marginBottom: 12 }}>
+      <div className="notice" style={{ marginBottom: 'var(--space-md)' }}>
         Đây là bộ giấy tờ mặc định dùng khi khởi tạo checklist cho ứng viên mới. Việc
         thay đổi tại đây <strong>không</strong> ảnh hưởng tới checklist của những ứng viên
         đã được khởi tạo trước đó.
@@ -129,8 +129,9 @@ export function DocumentCatalog() {
 
       <div className="toolbar">
         <div className="field">
-          <label>Thị trường</label>
+          <label htmlFor="dc-market">Thị trường</label>
           <select
+            id="dc-market"
             value={market}
             onChange={(e) => setMarket(e.target.value as RecruitmentMarket)}
           >
@@ -153,7 +154,7 @@ export function DocumentCatalog() {
 
       <div className="card">
         {catalogQuery.isLoading ? (
-          <Loading label="Đang tải bộ giấy tờ…" />
+          <Loading variant="table" rows={5} label="Đang tải bộ giấy tờ…" />
         ) : catalogQuery.error ? (
           <ErrorMessage error={catalogQuery.error} />
         ) : rows.length === 0 ? (
@@ -184,6 +185,7 @@ export function DocumentCatalog() {
                       <input
                         value={row.type}
                         placeholder="VD: PASSPORT"
+                        aria-label="Mã loại giấy tờ"
                         onChange={(e) => setRow(row._key, { type: e.target.value })}
                       />
                     </td>
@@ -191,12 +193,14 @@ export function DocumentCatalog() {
                       <input
                         value={row.label}
                         placeholder="VD: Hộ chiếu"
+                        aria-label="Nhãn giấy tờ (tiếng Việt)"
                         onChange={(e) => setRow(row._key, { label: e.target.value })}
                       />
                     </td>
                     <td>
                       <select
                         value={row.required ? 'yes' : 'no'}
+                        aria-label="Bắt buộc"
                         onChange={(e) => setRow(row._key, { required: e.target.value === 'yes' })}
                       >
                         <option value="yes">Bắt buộc</option>

@@ -9,6 +9,7 @@ param(
   [Parameter(Mandatory = $true)][string]$Password,
   [string]$Command,
   [string]$ScriptFile,
+  [string]$EnvPrefix = '',
   [int]$TimeoutSec = 600
 )
 $ErrorActionPreference = 'Stop'
@@ -23,7 +24,7 @@ try {
     $remote = '/tmp/_kiro_run.sh'
     Set-SFTPItem -SessionId $sftp.SessionId -Path $ScriptFile -Destination '/tmp' -Force
     $base = Split-Path -Leaf $ScriptFile
-    $cmd = "sed -i 's/\r`$//' /tmp/$base && bash /tmp/$base"
+    $cmd = "sed -i 's/\r`$//' /tmp/$base && $EnvPrefix bash /tmp/$base"
   }
   else {
     $cmd = $Command -replace "`r`n", "`n"

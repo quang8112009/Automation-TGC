@@ -4,11 +4,12 @@
  * Kept dependency-free (icons come from the inline-SVG Icon component).
  */
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { CSSProperties, ReactNode } from 'react';
-import { ApiError } from '../lib/apiClient';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { useCountUp } from '../lib/useCountUp';
+import { classifyError } from '../lib/errors';
 
 /**
  * Skeleton placeholder block (shimmer is disabled under prefers-reduced-motion
@@ -35,18 +36,27 @@ export function Skeleton({
 }
 
 /**
- * Loading state. Defaults to a small set of skeleton rows shaped like a card's
- * content; pass `inline` for a compact spinner+label (e.g. inside a button row).
- * The `label` API is preserved.
+ * Loading state. Renders skeletons shaped like the content they stand in for
+ * (Requirement 8.1) rather than a generic spinner. The default `card` variant
+ * keeps the original behaviour (a title bar + N skeleton rows); `kpi` mimics a
+ * row of StatCards and `table` mimics table rows. Pass `inline` for a compact
+ * spinner+label (e.g. inside a button row). The original `label`/`inline`/`rows`
+ * API is preserved.
  */
 export function Loading({
-  label = 'Loading…',
+  label = 'Đang tải…',
   inline = false,
   rows = 3,
+  variant = 'card',
+  cols = 4,
 }: {
   label?: string;
   inline?: boolean;
   rows?: number;
+  /** Skeleton shape to render. Defaults to the card-content shape. */
+  variant?: 'card' | 'kpi' | 'table';
+  /** Number of KPI tiles (variant="kpi") or table columns (variant="table"). */
+  cols?: number;
 }) {
   if (inline) {
     return (
@@ -55,9 +65,30 @@ export function Loading({
       </div>
     );
   }
+
+  if (variant === 'kpi') {
+    return (
+      <div className="skeleton-kpi-grid" role="status" aria-live="polite" aria-label={label}>
+        {Array.from({ length: Math.max(1, cols) }).map((_, i) => (
+          <div key={i} className="skeleton skeleton--kpi" aria-hidden="true" />
+        ))}
+      </div>
+    );
+  }
+
+  if (variant === 'table') {
+    return (
+      <div className="skeleton-stack" role="status" aria-live="polite" aria-label={label}>
+        {Array.from({ length: Math.max(1, rows) }).map((_, i) => (
+          <span key={i} className="skeleton skeleton--table-row" aria-hidden="true" />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="skeleton-stack" role="status" aria-live="polite" aria-label={label}>
-      <Skeleton height={16} width="40%" />
+      <Skeleton className="skeleton--title" />
       {Array.from({ length: Math.max(1, rows) }).map((_, i) => (
         <Skeleton key={i} className="skeleton--row" />
       ))}
@@ -84,43 +115,35 @@ export function Empty({
 }
 
 /**
- * Render an error. Recognizes the backend ApiError (with code/message) and
- * surfaces a friendly "service not configured" note for 502s (Gemini / social
- * platforms not configured on the server).
+ * Render an error. Delegates the value→variant decision to the pure
+ * `classifyError` (see lib/errors.ts, Design — Property 4): a 502 ApiError
+ * (external AI / social service not configured on the server) becomes a soft
+ * "notice"; any other error becomes an inline "error-box". Both variants always
+ * surface the backend `code` (when present) alongside the `message`.
  */
 export function ErrorMessage({ error }: { error: unknown }) {
-  if (error instanceof ApiError) {
-    const notConfigured = error.status === 502;
+  const view = classifyError(error);
+
+  if (view.kind === 'notice') {
     return (
-      <div className={notConfigured ? 'notice' : 'error-box'}>
-        {notConfigured ? (
-          <>
-            <strong>Service not configured.</strong> This action needs an external
-            service (AI / social platform) that isn’t set up on the server.
-            <div style={{ marginTop: 6 }}>
-              <code>
-                {error.code}: {error.message}
-              </code>
-            </div>
-          </>
-        ) : (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <Icon name="alert-triangle" size={16} />
-            <span>
-              <strong>{error.code}</strong> — {error.message}
-            </span>
-          </span>
-        )}
+      <div className="notice">
+        <strong>Dịch vụ chưa cấu hình.</strong> Thao tác này cần một dịch vụ ngoài
+        (AI / nền tảng mạng xã hội) chưa được thiết lập trên máy chủ.
+        <div className="state__detail">
+          <code>
+            {view.code}: {view.message}
+          </code>
+        </div>
       </div>
     );
   }
-  const message = error instanceof Error ? error.message : String(error);
+
   return (
     <div className="error-box">
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span className="state__line">
         <Icon name="alert-triangle" size={16} />
         <span>
-          <strong>Error</strong> — {message}
+          <strong>{view.code ?? 'Error'}</strong> — {view.message}
         </span>
       </span>
     </div>
@@ -130,7 +153,7 @@ export function ErrorMessage({ error }: { error: unknown }) {
 export function SuccessMessage({ children }: { children: ReactNode }) {
   return (
     <div className="success-box">
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span className="state__line">
         <Icon name="check" size={16} />
         <span>{children}</span>
       </span>
@@ -138,7 +161,12 @@ export function SuccessMessage({ children }: { children: ReactNode }) {
   );
 }
 
-const STATUS_CLASS: Record<string, string> = {
+/** The only badge color classes the contract allows (Design — Property 3). */
+const BADGE_CLASSES = ['badge-gray', 'badge-green', 'badge-red', 'badge-blue', 'badge-yellow'] as const;
+type BadgeClass = (typeof BADGE_CLASSES)[number];
+const VALID_BADGE_CLASSES = new Set<string>(BADGE_CLASSES);
+
+const STATUS_CLASS: Record<string, BadgeClass> = {
   // content / posts
   DRAFT: 'badge-gray',
   PENDING_REVIEW: 'badge-yellow',
@@ -169,9 +197,23 @@ const STATUS_CLASS: Record<string, string> = {
   STALE: 'badge-yellow',
 };
 
+/**
+ * Resolve a status string to a valid badge color class. Total: any unknown or
+ * empty status (or a mapping that somehow falls outside the allowed set) yields
+ * `badge-gray`. Pure so it can back Property 3.
+ */
+export function statusBadgeClass(status: string): BadgeClass {
+  const mapped = STATUS_CLASS[status];
+  return mapped && VALID_BADGE_CLASSES.has(mapped) ? mapped : 'badge-gray';
+}
+
+/**
+ * Status pill. Always renders the textual `status` label alongside the color so
+ * state is never conveyed by color alone (a11y, Requirement 9.6), and always
+ * returns a `"badge " + <valid class>` string (Requirement 5.6).
+ */
 export function StatusBadge({ status }: { status: string }) {
-  const cls = STATUS_CLASS[status] ?? 'badge-gray';
-  return <span className={`badge ${cls}`}>{status}</span>;
+  return <span className={`badge ${statusBadgeClass(status)}`}>{status}</span>;
 }
 
 /**
@@ -322,8 +364,29 @@ export function Modal({
     };
   }, [onClose]);
 
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
+  // Render via a portal to <body> so the fixed-position overlay is NOT trapped
+  // inside an ancestor that establishes a containing block for fixed elements
+  // (e.g. the page's `.reveal` wrapper animates `transform`, which would
+  // otherwise position the modal relative to that wrapper instead of the
+  // viewport — making the dialog render off-screen while only the backdrop dims).
+  return createPortal(
+    <div
+      className="modal-backdrop"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+      }}
+    >
       <div
         className="modal"
         onClick={(e) => e.stopPropagation()}
@@ -339,7 +402,8 @@ export function Modal({
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

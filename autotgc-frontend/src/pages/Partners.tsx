@@ -133,7 +133,7 @@ function PartnersTab({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {q.isLoading ? (
-        <Loading label="Đang tải…" />
+        <Loading variant="table" rows={6} />
       ) : q.error ? (
         <ErrorMessage error={q.error} />
       ) : q.data && q.data.items.length > 0 ? (
@@ -193,7 +193,23 @@ function PartnersTab({ isAdmin }: { isAdmin: boolean }) {
           </table>
         </div>
       ) : (
-        <Empty label="Chưa có đối tác nào." />
+        <Empty
+          icon="users"
+          label="Chưa có đối tác nào."
+          action={
+            isAdmin ? (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setEditing(null);
+                  setShowForm(true);
+                }}
+              >
+                <Icon name="plus" size={16} /> Đối tác mới
+              </button>
+            ) : undefined
+          }
+        />
       )}
 
       {showForm && isAdmin && (
@@ -341,7 +357,7 @@ function DestinationsTab({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {q.isLoading ? (
-        <Loading label="Đang tải…" />
+        <Loading variant="table" rows={6} />
       ) : q.error ? (
         <ErrorMessage error={q.error} />
       ) : q.data && q.data.items.length > 0 ? (
@@ -361,13 +377,13 @@ function DestinationsTab({ isAdmin }: { isAdmin: boolean }) {
               {q.data.items.map((d) => (
                 <tr key={d.id}>
                   <td>
-                    <div style={{ fontWeight: 600 }}>{d.name}</div>
+                    <div style={{ fontWeight: 'var(--fw-semibold)' }}>{d.name}</div>
                     <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
                       {d.visaType || '—'} · {condList(d.industries).join(', ') || 'mọi ngành'}
                     </div>
                   </td>
                   <td>{marketLabel(d.country)}</td>
-                  <td style={{ whiteSpace: 'normal', maxWidth: 280 }}>
+                  <td style={{ whiteSpace: 'normal' }}>
                     {[
                       d.minAge || d.maxAge ? `Tuổi ${d.minAge ?? '?'}–${d.maxAge ?? '?'}` : null,
                       d.gender && d.gender !== 'ANY' ? d.gender : null,
@@ -409,7 +425,23 @@ function DestinationsTab({ isAdmin }: { isAdmin: boolean }) {
           </table>
         </div>
       ) : (
-        <Empty label="Chưa có chương trình điểm đến nào." />
+        <Empty
+          icon="compass"
+          label="Chưa có chương trình điểm đến nào."
+          action={
+            isAdmin ? (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setEditing(null);
+                  setShowForm(true);
+                }}
+              >
+                <Icon name="plus" size={16} /> Chương trình mới
+              </button>
+            ) : undefined
+          }
+        />
       )}
 
       {showForm && isAdmin && (

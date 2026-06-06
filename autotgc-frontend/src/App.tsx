@@ -27,6 +27,9 @@ const CandidateDetail = lazy(() =>
   import('./pages/CandidateDetail').then((m) => ({ default: m.CandidateDetail })),
 );
 const AiConsultant = lazy(() => import('./pages/AiConsultant').then((m) => ({ default: m.AiConsultant })));
+const InterviewPrep = lazy(() =>
+  import('./pages/InterviewPrep').then((m) => ({ default: m.InterviewPrep })),
+);
 const Knowledge = lazy(() => import('./pages/Knowledge').then((m) => ({ default: m.Knowledge })));
 const Strategy = lazy(() => import('./pages/Strategy').then((m) => ({ default: m.Strategy })));
 const Drafts = lazy(() => import('./pages/Drafts').then((m) => ({ default: m.Drafts })));
@@ -86,6 +89,7 @@ export function App() {
           <Route path="/job-orders" element={<JobOrders />} />
           <Route path="/candidates" element={<Candidates />} />
           <Route path="/candidates/:id" element={<CandidateDetail />} />
+          <Route path="/interview-prep" element={<InterviewPrep />} />
           <Route path="/intake" element={<Intake />} />
           <Route path="/follow-ups" element={<FollowUps />} />
           <Route

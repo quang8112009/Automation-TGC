@@ -86,13 +86,13 @@ function BrandTemplatesPanel({
         <h2 className="card-title" style={{ margin: 0 }}>
           Mẫu thương hiệu (brand templates)
         </h2>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
-            <Icon name="plus" size={16} />
-            Mẫu mới
-          </button>
+        <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+          <Icon name="plus" size={16} />
+          Mẫu mới
+        </button>
       </div>
 
-      <div className="field" style={{ marginTop: 12 }}>
+      <div className="field" style={{ marginTop: 'var(--space-md)' }}>
         <label>Lọc theo loại</label>
         <select value={kindFilter} onChange={(e) => onKindFilter(e.target.value)}>
           <option value="">Tất cả</option>
@@ -107,7 +107,7 @@ function BrandTemplatesPanel({
       {actionError != null && <ErrorMessage error={actionError} />}
 
       {templatesQuery.isLoading ? (
-        <Loading label="Đang tải…" />
+        <Loading variant="table" rows={5} />
       ) : templatesQuery.error ? (
         <ErrorMessage error={templatesQuery.error} />
       ) : templates.length > 0 ? (
@@ -154,7 +154,16 @@ function BrandTemplatesPanel({
           </table>
         </div>
       ) : (
-        <Empty label="Chưa có mẫu thương hiệu nào." />
+        <Empty
+          label="Chưa có mẫu thương hiệu nào."
+          icon="palette"
+          action={
+            <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+              <Icon name="plus" size={16} />
+              Mẫu mới
+            </button>
+          }
+        />
       )}
 
       {showCreate && (
@@ -277,7 +286,7 @@ function StandaloneAssetPanel() {
   return (
     <div className="card">
       <h2 className="card-title">Tạo tài sản độc lập</h2>
-      <div className="muted" style={{ marginBottom: 12 }}>
+      <div className="muted" style={{ marginBottom: 'var(--space-md)' }}>
         Nhập loại tài sản + nội dung; hệ thống trả về <strong>bản thiết kế render-ready</strong>{' '}
         (chưa render thành ảnh/video).
       </div>

@@ -13,7 +13,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { Clock } from '../auth/jwt';
 import { systemClock } from '../auth/jwt';
-import type { GeminiClient } from '../infra/gemini';
+import type { ContentGenerator } from '../strategy/personaService';
 import type { AlertDispatcher } from '../infra/alerts';
 import type { EventBus } from '../infra/events';
 import { insightTransition } from './insightStateMachine';
@@ -221,7 +221,7 @@ export class FeedbackEngine {
 
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly gemini: GeminiClient,
+    private readonly gemini: ContentGenerator,
     private readonly config: FeedbackConfig = DEFAULT_FEEDBACK_CONFIG,
     private readonly alerts: AlertDispatcher,
     private readonly clock: Clock = systemClock,

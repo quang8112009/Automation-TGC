@@ -22,6 +22,7 @@ import { systemClock } from '../auth/jwt';
 import type { AuthInfo } from '../http/authMiddleware';
 import type { ContentGenerator } from '../strategy/personaService';
 import { ConflictError, ForbiddenError, NotFoundError } from '../infra/errors';
+import { enforceAiGeneratedFlag } from '../infra/aiOptional';
 import { AuditLog } from '../analytics/auditLog';
 import {
   aggregateReport,
@@ -128,6 +129,13 @@ export class ReportService {
       status = 'DRAFT';
       aiGenerated = await this.applyAiSummary(content, type, period);
     }
+
+    // AI-OPTIONAL invariant guard (R3.3, R3.4): a report whose summary came from
+    // the deterministic fallback can never report aiGenerated:true.
+    aiGenerated = enforceAiGeneratedFlag(
+      { aiGenerated },
+      aiGenerated ? 'AI' : 'FALLBACK',
+    ).aiGenerated;
 
     const row = await this.prisma.companyReport.create({
       data: {

@@ -1,7 +1,9 @@
 /**
  * Dependency-free chart primitives (pure SVG/CSS) for the analytics pages.
  * Kept intentionally small and consistent with the app's plain-CSS approach —
- * no charting library. Colors use the app palette; all text meets contrast.
+ * no charting library. Colors are read from the Design_Token_Layer (the :root
+ * CSS variables in styles.css) so charts follow the Theme instead of using
+ * literal hex; all text meets contrast.
  *
  * Components:
  *  - BarChart      : horizontal labelled bars (counts/percentages)
@@ -14,21 +16,57 @@ import type { ReactNode } from 'react';
 export interface ChartDatum {
   label: string;
   value: number;
-  /** Optional CSS color for the bar (defaults to the primary blue). */
+  /** Optional CSS color for the bar (defaults to the primary navy token). */
   color?: string;
   /** Optional pre-formatted value label (defaults to the number). */
   display?: string;
 }
 
-const PALETTE = ['#0F1E3D', '#334766', '#5B7088', '#8CA0B8', '#B08542', '#A89E8E'];
+/**
+ * Resolve a CSS custom property from the Design_Token_Layer (`:root`) at
+ * runtime, so chart colors track the active Theme. Falls back to the supplied
+ * literal when the variable can't be read — e.g. server-side rendering, jsdom,
+ * or before the global stylesheet is applied. The fallback mirrors the token's
+ * value and is the only literal kept (no theme color is hardcoded as the
+ * primary source).
+ */
+function readCssVar(token: string, fallback: string): string {
+  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') {
+    return fallback;
+  }
+  try {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+    return value || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Series ramp expressed as Design_Token_Layer variables (navy → slate → gold →
+ * warm neutrals), a single consistent ramp rather than a rainbow. Each entry is
+ * a `[cssVar, fallback]` pair; the fallback mirrors the token value for non-DOM
+ * environments.
+ */
+const PALETTE: ReadonlyArray<readonly [string, string]> = [
+  ['--color-primary', '#0F1E3D'], // Academic Navy
+  ['--color-secondary', '#334766'], // Slate Blue
+  ['--color-gold', '#B08542'], // Prestige Gold
+  ['--color-gold-text', '#87651F'], // deep gold
+  ['--stone-500', '#82786A'], // warm gray
+  ['--stone-400', '#A89E8E'], // light taupe
+];
 
 /** Brand accent used to highlight the "this one matters" series (Prestige Gold). */
-const ACCENT = '#B08542';
+function accentColor(): string {
+  return readCssVar('--color-gold', '#B08542');
+}
 
-/** Pick a stable palette color by index. */
+/** Pick a stable palette color by index, resolved from the Theme tokens. */
 export function seriesColor(index: number): string {
   const safe = ((Math.trunc(index) % PALETTE.length) + PALETTE.length) % PALETTE.length;
-  return PALETTE[safe] ?? '#0F1E3D';
+  const entry: readonly [string, string] = PALETTE[safe] ?? ['--color-primary', '#0F1E3D'];
+  return readCssVar(entry[0], entry[1]);
 }
 
 function pct(value: number, max: number): number {
@@ -51,12 +89,14 @@ export function BarChart({ data, unit = '' }: { data: ChartDatum[]; unit?: strin
     .map((d, originalIndex) => ({ ...d, originalIndex }))
     .sort((a, b) => (Number.isFinite(b.value) ? b.value : 0) - (Number.isFinite(a.value) ? a.value : 0));
   const max = Math.max(...sorted.map((d) => (Number.isFinite(d.value) ? d.value : 0)), 0);
+  const accent = accentColor();
+  const slate = readCssVar('--color-secondary', '#334766');
   return (
     <div className="bar-chart">
       {sorted.map((d, i) => {
         // Single slate series; the top (largest) bar gets the gold accent so
         // the standout category is obvious. Explicit colors win.
-        const fill = d.color ?? (i === 0 ? ACCENT : '#334766');
+        const fill = d.color ?? (i === 0 ? accent : slate);
         return (
           <div className="bar-row" key={`${d.label}-${d.originalIndex}`}>
             <div className="bar-label" title={d.label}>
@@ -118,14 +158,21 @@ export function FunnelChart({ stages }: { stages: FunnelStage[] }) {
     }
   }
 
-  // Navy gradient ramp across stages (navy → slate → light blue-gray).
-  const RAMP = ['#0F1E3D', '#334766', '#5B7088', '#8CA0B8'];
+  // Navy gradient ramp across stages (navy → slate → light blue-gray), read
+  // from the Design_Token_Layer so the funnel tracks the active Theme.
+  const RAMP: ReadonlyArray<string> = [
+    readCssVar('--color-primary', '#0F1E3D'),
+    readCssVar('--color-secondary', '#334766'),
+    readCssVar('--stone-500', '#82786A'),
+    readCssVar('--stone-400', '#A89E8E'),
+  ];
+  const accent = accentColor();
 
   return (
     <div className="funnel">
       {stages.map((s, i) => {
         const isWorst = i === worstIndex;
-        const fill = isWorst ? ACCENT : RAMP[Math.min(i, RAMP.length - 1)] ?? '#334766';
+        const fill = isWorst ? accent : (RAMP[Math.min(i, RAMP.length - 1)] ?? accent);
         return (
           <div className="funnel-stage" key={`${s.label}-${i}`}>
             <div className="funnel-meta">
@@ -155,12 +202,13 @@ export function FunnelChart({ stages }: { stages: FunnelStage[] }) {
 
 /**
  * SVG donut showing a single ratio (0..100). `caption` renders under the value.
- * Stroke color defaults to the brand primary; pass a custom color for context.
+ * Stroke color defaults to the brand primary token; pass a custom color for
+ * context. The unfilled track uses the warm-stone token to match the Theme.
  */
 export function DonutChart({
   percent,
   caption,
-  color = '#0F1E3D',
+  color,
   size = 132,
 }: {
   percent: number;
@@ -174,16 +222,20 @@ export function DonutChart({
   const c = 2 * Math.PI * r;
   const dash = (safe / 100) * c;
   const center = size / 2;
+  // Default the arc to the navy primary token; the track to warm stone. Both
+  // resolve from the Design_Token_Layer with literal fallbacks for non-DOM.
+  const arcColor = color ?? readCssVar('--color-primary', '#0F1E3D');
+  const trackColor = readCssVar('--stone-200', '#E3DCD0');
   return (
     <div className="donut" style={{ width: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${safe.toFixed(0)}%`}>
-        <circle cx={center} cy={center} r={r} fill="none" stroke="#E3DCD0" strokeWidth={stroke} />
+        <circle cx={center} cy={center} r={r} fill="none" stroke={trackColor} strokeWidth={stroke} />
         <circle
           cx={center}
           cy={center}
           r={r}
           fill="none"
-          stroke={color}
+          stroke={arcColor}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={`${dash} ${c - dash}`}

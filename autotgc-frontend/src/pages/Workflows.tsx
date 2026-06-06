@@ -21,6 +21,7 @@ import {
   SuccessMessage,
   formatDate,
 } from '../components/ui';
+import { PersonaPicker } from '../components/PersonaPicker';
 
 const PLATFORMS = ['facebook', 'tiktok', 'website'];
 
@@ -86,6 +87,7 @@ function StartWorkflowCard({ onStarted }: { onStarted: (id: string) => void }) {
       <div className="field">
         <label>Persona IDs (comma-separated)</label>
         <input value={personaIds} onChange={(e) => setPersonaIds(e.target.value)} />
+        <PersonaPicker value={personaIds} onChange={setPersonaIds} />
       </div>
       <div className="field">
         <label>Objective</label>
@@ -93,11 +95,11 @@ function StartWorkflowCard({ onStarted }: { onStarted: (id: string) => void }) {
       </div>
       <label>Platforms &amp; times (optional)</label>
       {PLATFORMS.map((p) => (
-        <div key={p} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}>
+        <div key={p} style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center', marginBottom: 'var(--space-sm)' }}>
           <label style={{ margin: 0, minWidth: 90 }}>
             <input
               type="checkbox"
-              style={{ width: 'auto', marginRight: 6 }}
+              style={{ width: 'auto', marginRight: 'var(--space-xs)' }}
               checked={!!selected[p]}
               onChange={(e) => setSelected((s) => ({ ...s, [p]: e.target.checked }))}
             />
@@ -187,6 +189,8 @@ function RunDetail({ runId }: { runId: string }) {
           {(resumeMutation.error ?? cancelMutation.error) != null && (
             <ErrorMessage error={resumeMutation.error ?? cancelMutation.error} />
           )}
+          {resumeMutation.isSuccess && <SuccessMessage>Resumed run after approval gate.</SuccessMessage>}
+          {cancelMutation.isSuccess && <SuccessMessage>Run cancelled.</SuccessMessage>}
           <dl className="kv">
             <dt>Status</dt>
             <dd>
@@ -206,7 +210,7 @@ function RunDetail({ runId }: { runId: string }) {
             )}
           </dl>
 
-          <div className="row-actions" style={{ margin: '12px 0' }}>
+          <div className="row-actions" style={{ margin: 'var(--space-md) 0' }}>
             <button
               className="btn"
               disabled={data.status !== 'WAITING_APPROVAL' || resumeMutation.isPending}

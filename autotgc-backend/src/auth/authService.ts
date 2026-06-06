@@ -39,6 +39,8 @@ export class AuthService {
     private readonly lockoutThreshold: number,
     private readonly accessTtlHours = 24,
     private readonly refreshTtlDays = 30,
+    /** Auto-recovery window (minutes) for a locked account. 0 disables auto-unlock. */
+    private readonly lockoutCooldownMinutes = 15,
   ) {}
 
   private expiries(now: Date): { accessExpiresAt: Date; refreshExpiresAt: Date } {
@@ -113,21 +115,48 @@ export class AuthService {
       throw new UnauthorizedError('Invalid credentials');
     }
 
-    // Locked account: 423 regardless of password correctness.
+    // Locked account handling with TIME-BOXED auto-recovery (security).
+    //
+    // A purely permanent lock means a credential-stuffing burst can permanently
+    // DoS any account — including the only ADMIN, who would then have no way back
+    // in (login is the only public entry; unlock is itself ADMIN-only). So a lock
+    // set by the failed-login threshold carries an expiry (`lockedUntil`): once it
+    // passes, the next attempt auto-clears the lock and proceeds to normal
+    // password verification. A lock WITHOUT an expiry (lockedUntil = null, e.g. a
+    // manual ADMIN lock or a legacy row) stays locked until an ADMIN unlocks it.
     if (user.locked) {
-      throw new LockedError();
+      const now = new Date();
+      const canAutoRecover =
+        this.lockoutCooldownMinutes > 0 &&
+        user.lockedUntil !== null &&
+        user.lockedUntil <= now;
+      if (!canAutoRecover) {
+        throw new LockedError();
+      }
+      // Cooldown elapsed: auto-recover (reset counter + clear lock) before verify.
+      await this.prisma.userAccount.update({
+        where: { id: user.id },
+        data: { locked: false, lockedAt: null, lockedUntil: null, failedLoginCount: 0 },
+      });
+      user.failedLoginCount = 0;
+      user.locked = false;
     }
 
     const ok = await verifyPassword(user.passwordHash, password as string);
     if (!ok) {
       const nextCount = user.failedLoginCount + 1;
       const shouldLock = nextCount >= this.lockoutThreshold;
+      const lockedUntil =
+        shouldLock && this.lockoutCooldownMinutes > 0
+          ? new Date(Date.now() + this.lockoutCooldownMinutes * 60 * 1000)
+          : null;
       await this.prisma.userAccount.update({
         where: { id: user.id },
         data: {
           failedLoginCount: nextCount,
           locked: shouldLock,
           lockedAt: shouldLock ? new Date() : null,
+          lockedUntil,
         },
       });
       throw new UnauthorizedError('Invalid credentials');

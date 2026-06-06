@@ -9,7 +9,8 @@
 - **Auth:** JWT via `jose`; password hashing via `argon2`.
 - **Logging:** `pino`, wired at the process boundary with secret redaction.
 - **Testing:** Vitest, with `fast-check` for property-based testing.
-- **AI:** Google Gemini API (external).
+- **AI (text):** DeepSeek V4 via an OpenAI-compatible ChatCompletions gateway (`src/infra/aiTextClient.ts`; the `GeminiClient` name is a backward-compat alias, and the `GEMINI_*` text env keys are legacy names that now point at the DeepSeek gateway).
+- **AI (media):** Google Gemini / VEO image+video generation, a separate route (`GEMINI_IMAGE_*`, `VEO_*` → `POST {base}/images/generations`); not migrated to DeepSeek.
 
 ## Deployment
 

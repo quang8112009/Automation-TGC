@@ -84,7 +84,7 @@ export function FollowUps() {
         </div>
       </div>
 
-      <p className="muted" style={{ marginTop: -8 }}>
+      <p className="muted" style={{ marginTop: 'calc(-1 * var(--space-sm))' }}>
         Hệ thống tự phát hiện học sinh đã hỏi rồi im lặng (≥ 3 ngày) và soạn sẵn tin nhắn cá nhân
         hóa để nhắc khéo, tăng tỷ lệ chuyển đổi.
       </p>
@@ -108,7 +108,7 @@ export function FollowUps() {
         </div>
 
         {q.isLoading ? (
-          <Loading label="Đang tải…" />
+          <Loading variant="table" rows={8} />
         ) : q.error ? (
           <ErrorMessage error={q.error} />
         ) : q.data && q.data.items.length > 0 ? (
@@ -129,7 +129,7 @@ export function FollowUps() {
                   <tr key={t.id}>
                     <td>{CHANNEL_LABEL[t.channel] ?? t.channel}</td>
                     <td>{t.topic || '—'}</td>
-                    <td style={{ whiteSpace: 'normal', maxWidth: 360 }}>{t.message}</td>
+                    <td style={{ whiteSpace: 'normal' }}>{t.message}</td>
                     <td>
                       <span className={`badge ${STATUS_BADGE[t.status]}`}>{STATUS_LABEL[t.status]}</span>
                     </td>
@@ -153,7 +153,19 @@ export function FollowUps() {
             </table>
           </div>
         ) : (
-          <Empty label="Chưa có lời nhắc nào. Bấm 'Quét drop-off' để hệ thống tạo." icon="bell" />
+          <Empty
+            label="Chưa có lời nhắc nào. Bấm 'Quét drop-off' để hệ thống tạo."
+            icon="bell"
+            action={
+              <button
+                className="btn btn--secondary btn-sm"
+                disabled={scanMutation.isPending}
+                onClick={() => { setMsg(null); scanMutation.mutate(); }}
+              >
+                <Icon name="search" size={16} /> {scanMutation.isPending ? 'Đang quét…' : 'Quét drop-off'}
+              </button>
+            }
+          />
         )}
       </div>
     </div>

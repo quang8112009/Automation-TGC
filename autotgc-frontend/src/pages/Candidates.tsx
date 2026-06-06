@@ -93,7 +93,7 @@ export function Candidates() {
       <div className="card">
         <h2 className="card-title">Ứng viên theo giai đoạn</h2>
         {statsQuery.isLoading ? (
-          <Loading label="Đang tải…" />
+          <Loading variant="kpi" cols={4} />
         ) : statsQuery.error ? (
           <ErrorMessage error={statsQuery.error} />
         ) : statsQuery.data && statsQuery.data.buckets.length > 0 ? (
@@ -150,7 +150,7 @@ export function Candidates() {
       {/* Table */}
       <div className="card">
         {candidatesQuery.isLoading ? (
-          <Loading label="Đang tải…" />
+          <Loading variant="table" rows={8} />
         ) : candidatesQuery.error ? (
           <ErrorMessage error={candidatesQuery.error} />
         ) : candidatesQuery.data && candidatesQuery.data.items.length > 0 ? (
@@ -205,7 +205,16 @@ export function Candidates() {
             />
           </>
         ) : (
-          <Empty label="Không có ứng viên nào khớp bộ lọc." />
+          <Empty
+            icon="users"
+            label="Không có ứng viên nào khớp bộ lọc."
+            action={
+              <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+                <Icon name="plus" size={16} />
+                Ứng viên mới
+              </button>
+            }
+          />
         )}
       </div>
 
@@ -265,7 +274,7 @@ function CreateCandidateModal({
   return (
     <Modal title="Ứng viên mới" onClose={onClose}>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
-      <div className="muted" style={{ marginBottom: 12 }}>
+      <div className="muted" style={{ marginBottom: 'var(--space-sm)' }}>
         Cần họ tên và ít nhất một thông tin liên hệ (điện thoại hoặc email).
       </div>
       <div className="grid grid-2">

@@ -64,12 +64,12 @@ function ScheduleCard() {
       {PLATFORMS.map((p) => (
         <div
           key={p}
-          style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}
+          style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center', marginBottom: 'var(--space-sm)' }}
         >
           <label style={{ margin: 0, minWidth: 90 }}>
             <input
               type="checkbox"
-              style={{ width: 'auto', marginRight: 6 }}
+              style={{ width: 'auto', marginRight: 'var(--space-xs)' }}
               checked={!!selected[p]}
               onChange={(e) => setSelected((s) => ({ ...s, [p]: e.target.checked }))}
             />
@@ -152,6 +152,7 @@ function PublishNowCard() {
     <div className="card">
       <h2 className="card-title">Trigger Publish</h2>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
+      {result && <SuccessMessage>Published.</SuccessMessage>}
       <div className="field">
         <label>Scheduled Post ID *</label>
         <input value={id} onChange={(e) => setId(e.target.value)} />

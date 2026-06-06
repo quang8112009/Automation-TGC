@@ -32,10 +32,18 @@ import { ScoringService } from '../analytics/scoringService';
 import { PublishingWorker } from '../content/publishingWorker';
 import type { AdapterRegistry } from '../platforms/registry';
 import type { AlertDispatcher } from './alerts';
-import { GeminiClient } from './gemini';
+import { AiTextClient } from './aiTextClient';
+import { parseAiTextConfigFromSecrets } from './aiTextConfig';
 import { getEventBus } from './events';
 import { ReportService } from '../reporting/reportService';
 import { registerReportJobs } from '../reporting/reportScheduler';
+import { TimelineAgent } from '../applications/timelineAgent';
+import { NotificationService } from '../oversight/notificationService';
+import {
+  RetentionPurgeService,
+  parseRetentionMonths,
+  DEFAULT_RETENTION_CONFIG,
+} from '../privacy/retentionPurgeService';
 import { createPublishQueue, createScoreQueue, enqueuePublish, enqueueScore } from '../queues/queues';
 // --- AI marketing autopilot (opt-in scheduled jobs) collaborators ------------
 import { isMarket } from '../marketing/markets';
@@ -67,6 +75,7 @@ function cronExprs(secrets: SecretLoader): Record<string, string> {
     analyticsCollect: secrets.optional('CRON_ANALYTICS_COLLECT') ?? '0 */6 * * *', // every 6h
     publishDueScan: secrets.optional('CRON_PUBLISH_SCAN') ?? '* * * * *', // every minute
     weeklyFeedback: secrets.optional('CRON_WEEKLY_FEEDBACK') ?? '0 0 * * 0', // Sun 00:00
+    retentionPurge: secrets.optional('CRON_RETENTION_PURGE') ?? '30 3 * * *', // daily 03:30
   };
 }
 
@@ -267,10 +276,50 @@ export function startScheduledJobs(deps: JobDeps): Scheduler {
   });
 
   // --- Weekly feedback analysis (Sun 00:00) ---------------------------------
-  const gemini = new GeminiClient(secrets.optional('GEMINI_API_KEY'), 'gemini-2.5-pro');
-  const feedback = new FeedbackEngine(prisma, gemini, undefined, alerts, undefined, eventBus);
+  // Build the AI text client from the SAME normalized config path as
+  // composeServices (Config_Parser owns the default model `deepseek-v4-flash`
+  // and base-url/model validation); fail-fast on invalid config, naming ONLY the
+  // offending key — never a secret value. One instance is shared by the
+  // FeedbackEngine and the ReportService below.
+  const aiTextClient = buildAiTextClient(secrets);
+  const feedback = new FeedbackEngine(prisma, aiTextClient, undefined, alerts, undefined, eventBus);
   scheduler.schedule('weekly-feedback', exprs.weeklyFeedback, async () => {
     await feedback.run();
+  });
+
+  // --- Retention purge (daily; OPT-IN, destructive) -------------------------
+  // ENFORCES the retention schedule: hard-deletes aged analytics, anonymizes
+  // aged lead/intake PII, and redacts stale audit/activity log detail payloads.
+  // Because it DELETES/anonymizes real data, the destructive run is gated behind
+  // RETENTION_PURGE_ENABLED (default OFF) so it never surprise-purges on a fresh
+  // deploy. The job is still REGISTERED (visible/observable) and logs a skip line
+  // until an operator opts in after reviewing the windows. Errors are caught +
+  // logged by the NodeCronScheduler.
+  const retentionEnabled = isJobEnabled(secrets.optional('RETENTION_PURGE_ENABLED'));
+  const retentionPurge = new RetentionPurgeService(prisma, {
+    analyticsMonths: parseRetentionMonths(
+      secrets.optional('RETENTION_ANALYTICS_MONTHS'),
+      DEFAULT_RETENTION_CONFIG.analyticsMonths,
+    ),
+    piiMonths: parseRetentionMonths(
+      secrets.optional('RETENTION_PII_MONTHS'),
+      DEFAULT_RETENTION_CONFIG.piiMonths,
+    ),
+    logMonths: parseRetentionMonths(
+      secrets.optional('RETENTION_LOG_MONTHS'),
+      DEFAULT_RETENTION_CONFIG.logMonths,
+    ),
+  });
+  scheduler.schedule('retention-purge', exprs.retentionPurge, async () => {
+    if (!retentionEnabled) {
+      logger.info(
+        { job: 'retention-purge' },
+        'retention-purge skipped: RETENTION_PURGE_ENABLED is not set (no data was purged)',
+      );
+      return;
+    }
+    const summary = await retentionPurge.purge(new Date());
+    logger.info({ job: 'retention-purge', ...summary }, 'retention purge completed a run');
   });
 
   // --- AI marketing autopilot (OPT-IN; OFF by default) ----------------------
@@ -281,18 +330,34 @@ export function startScheduledJobs(deps: JobDeps): Scheduler {
   registerAutopilotJobs(scheduler, optionalJobs, deps);
 
   // --- Company AI reports (weekly + monthly) --------------------------------
-  // Reuse the GeminiClient already built for weekly-feedback so the report
+  // Reuse the AI text client already built for weekly-feedback so the report
   // interpretation seam shares the same configured key/model. ReportService
-  // falls back to a deterministic summary when Gemini is absent/fails, and the
-  // jobs only ever persist DRAFT reports (review mode). Errors thrown inside
+  // falls back to a deterministic summary when the AI client is absent/fails, and
+  // the jobs only ever persist DRAFT reports (review mode). Errors thrown inside
   // these jobs are caught + logged by the NodeCronScheduler (Req 4.1, 4.3).
-  const reportService = new ReportService(prisma, gemini);
+  const reportService = new ReportService(prisma, aiTextClient);
   registerReportJobs(scheduler, { reportService, secrets });
+
+  // --- Study-abroad timeline sweep (every 30m by default) -------------------
+  // Proactively creates idempotent due-item reminders for application/visa
+  // timelines (study-abroad-ai-advisor-suite Req 15.1, 21.4). Reminder creation
+  // is idempotent via ReminderLog @@unique(dueItemId, windowKey); failures are
+  // caught + logged by the NodeCronScheduler (per job name + timestamp).
+  const timelineAgent = new TimelineAgent(prisma, new NotificationService(prisma, eventBus));
+  const timelineSweepCron = secrets.optional('CRON_TIMELINE_SWEEP') ?? '*/30 * * * *';
+  scheduler.schedule('study-timeline-sweep', timelineSweepCron, async () => {
+    await timelineAgent.sweepDueReminders(new Date());
+  });
 
   scheduler.start();
   logger.info(
     {
-      jobs: [...Object.keys(exprs), 'weekly-company-report', 'monthly-company-report'],
+      jobs: [
+        ...Object.keys(exprs),
+        'weekly-company-report',
+        'monthly-company-report',
+        'study-timeline-sweep',
+      ],
       optionalJobs: enabledOptionalJobs,
       queueMode: Boolean(redisUrl),
     },
@@ -329,14 +394,31 @@ function registerAutopilotJobs(
   }
 }
 
-/** Build an inline GeminiClient from env (key/model/base-url); never logs values. */
-function buildInlineGemini(secrets: SecretLoader): GeminiClient {
-  return new GeminiClient(
-    secrets.optional('GEMINI_API_KEY'),
-    secrets.optional('GEMINI_MODEL') ?? 'gemini-2.5-pro',
-    undefined,
-    secrets.optional('GEMINI_BASE_URL') || undefined,
-  );
+/**
+ * Build an AI text client from the SAME normalized config path as
+ * composeServices: the pure Config_Parser reads the non-secret connection keys
+ * (GEMINI_BASE_URL / GEMINI_MODEL / GEMINI_TIMEOUT_MS), applies the default model
+ * (`deepseek-v4-flash`) and timeout normalization, and validates base-url/model.
+ * Invalid config fails fast, naming ONLY the offending key — never a secret
+ * value (R8.4). The API key is read separately and handed to the client directly;
+ * its value is never logged.
+ */
+function buildAiTextClient(secrets: SecretLoader): AiTextClient {
+  const parsed = parseAiTextConfigFromSecrets(secrets);
+  if (!parsed.ok) {
+    throw new Error(`AI text config invalid: key "${parsed.invalidKey}" ${parsed.message}`);
+  }
+  return new AiTextClient(secrets.optional('GEMINI_API_KEY'), parsed.config);
+}
+
+/**
+ * Build an inline AI text client for the opt-in autopilot jobs (research +
+ * planning). Delegates to {@link buildAiTextClient} so the model id is never
+ * hardcoded — the Config_Parser owns the default (`deepseek-v4-flash`). The
+ * function name is kept stable so existing callers do not break.
+ */
+function buildInlineGemini(secrets: SecretLoader): AiTextClient {
+  return buildAiTextClient(secrets);
 }
 
 /** Brand-knowledge grounding provider, built inline from prisma (like the routes do). */
@@ -347,7 +429,7 @@ function buildBrandKnowledge(prisma: PrismaClient): KnowledgeBrandProvider {
 /**
  * auto-market-research: refresh trend signals for each configured market. Each
  * market is isolated in its own try/catch so one failure never stops the rest;
- * per-market counts are logged. Grounded with inline Gemini + brand knowledge.
+ * per-market counts are logged. Grounded with the inline AI text client + brand knowledge.
  */
 async function runAutoResearch(deps: JobDeps): Promise<void> {
   const { prisma, secrets, logger } = deps;

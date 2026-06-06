@@ -9,5 +9,6 @@
         "*",
         "web_fetch",
         "remote_web_search"
-    ]
+    ],
+    "typescript.autoClosingTags": false
 }

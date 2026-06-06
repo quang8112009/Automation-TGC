@@ -14,7 +14,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../auth/jwt';
 import type { AppConfig } from '../infra/config';
-import type { GeminiClient } from '../infra/gemini';
+import type { ContentGenerator } from '../strategy/personaService';
 import type { AlertDispatcher } from '../infra/alerts';
 import type { AdapterRegistry } from '../platforms/registry';
 import type { EventBus } from '../infra/events';
@@ -34,7 +34,7 @@ export interface AnalyticsRouteDeps {
   prisma: PrismaClient;
   jwt: JwtService;
   config: AppConfig;
-  gemini: GeminiClient;
+  gemini: ContentGenerator;
   registry: AdapterRegistry;
   tokenManager: TokenGate;
   alerts: AlertDispatcher;

@@ -153,7 +153,7 @@ export function Leads() {
       <div className="card">
         <h2 className="card-title">Leads by Source</h2>
         {statsQuery.isLoading ? (
-          <Loading />
+          <Loading variant="kpi" cols={4} />
         ) : statsQuery.error ? (
           <ErrorMessage error={statsQuery.error} />
         ) : statsQuery.data && statsQuery.data.buckets.length > 0 ? (
@@ -165,7 +165,7 @@ export function Leads() {
             ))}
           </div>
         ) : (
-          <div className="muted">No stats available.</div>
+          <Empty icon="bar-chart-3" label="No stats available." />
         )}
       </div>
 
@@ -227,7 +227,7 @@ export function Leads() {
       {/* Table */}
       <div className="card">
         {leadsQuery.isLoading ? (
-          <Loading />
+          <Loading variant="table" rows={8} />
         ) : leadsQuery.error ? (
           <ErrorMessage error={leadsQuery.error} />
         ) : leadsQuery.data && leadsQuery.data.items.length > 0 ? (
@@ -300,7 +300,18 @@ export function Leads() {
             />
           </>
         ) : (
-          <Empty label="No leads match your filters." />
+          <Empty
+            icon="users"
+            label="No leads match your filters."
+            action={
+              isAdmin ? (
+                <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+                  <Icon name="plus" size={16} />
+                  New Lead
+                </button>
+              ) : undefined
+            }
+          />
         )}
       </div>
 
@@ -465,7 +476,7 @@ function EditLeadModal({
             </option>
           ))}
         </select>
-        <div className="muted" style={{ marginTop: 4 }}>
+        <div className="muted" style={{ marginTop: 'var(--space-xs)' }}>
           Illegal transitions are rejected by the server (409).
         </div>
       </div>
@@ -536,9 +547,9 @@ function ViewLeadModal({ id, onClose }: { id: string; onClose: () => void }) {
             <dd>{formatDate(data.createdAt)}</dd>
           </dl>
 
-          <h3 style={{ marginTop: 18 }}>History</h3>
+          <h3 style={{ marginTop: 'var(--space-md)' }}>History</h3>
           {data.history.length === 0 ? (
-            <div className="muted">No history entries.</div>
+            <Empty icon="clipboard-list" label="No history entries." />
           ) : (
             <div className="table-wrap">
               <table className="data">

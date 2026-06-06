@@ -19,6 +19,7 @@ import type { AppConfig } from '../infra/config';
 import type { EventBus } from '../infra/events';
 import { requireAuth, rbacGuard } from '../http/authMiddleware';
 import { verifySignature } from '../infra/hmac';
+import { recordWebhookDelivery } from '../infra/webhookReplay';
 import { IntakeService, NOOP_SENDER } from './intakeService';
 import type { ChannelSender, IntakeChannelValue, InboundMessage } from './intakeService';
 import { INTAKE_PUBLIC_PATHS } from './publicPaths';
@@ -115,8 +116,10 @@ export async function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRou
         ? (request.body as Buffer)
         : Buffer.from(typeof request.body === 'string' ? request.body : '', 'utf8');
       const signature = (request.headers['x-hub-signature-256'] as string | undefined) ?? '';
-      // Only enforce HMAC when a secret is configured (Phase-1 friendly).
-      if (fbSecret && !verifySignature(fbSecret, raw, signature)) {
+      // Fail CLOSED: verifySignature returns false when the secret is empty/unset,
+      // so an unconfigured Facebook intake webhook rejects ALL requests (401)
+      // rather than accepting forged/unsigned payloads (matches the lead webhook).
+      if (!verifySignature(fbSecret, raw, signature)) {
         return reply.code(401).send({ error: { code: 'INVALID_SIGNATURE', message: 'Bad signature' } });
       }
       let payload: unknown;
@@ -124,6 +127,17 @@ export async function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRou
         payload = JSON.parse(raw.toString('utf8'));
       } catch {
         return reply.code(400).send({ error: { code: 'INVALID_JSON', message: 'Bad JSON' } });
+      }
+      // Replay protection: a valid-but-replayed delivery is a no-op 409.
+      const entryId = asString((payload as { entry?: Array<{ id?: unknown }> }).entry?.[0]?.id);
+      const fresh = await recordWebhookDelivery(prisma, {
+        source: 'intake:facebook',
+        deliveryId: entryId,
+        rawBody: raw,
+        signature,
+      });
+      if (!fresh) {
+        return reply.code(409).send({ error: { code: 'WEBHOOK_REPLAY', message: 'Duplicate delivery' } });
       }
       await handleInbound('FACEBOOK', parseFacebookMessaging(payload), payload);
       // Messenger expects a fast 200 ack.
@@ -138,7 +152,8 @@ export async function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRou
         (request.headers['x-zevent-signature'] as string | undefined) ??
         (request.headers['x-signature'] as string | undefined) ??
         '';
-      if (zaloSecret && !verifySignature(zaloSecret, raw, signature)) {
+      // Fail CLOSED: an unconfigured Zalo secret rejects ALL requests (401).
+      if (!verifySignature(zaloSecret, raw, signature)) {
         return reply.code(401).send({ error: { code: 'INVALID_SIGNATURE', message: 'Bad signature' } });
       }
       let payload: unknown;
@@ -146,6 +161,14 @@ export async function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRou
         payload = JSON.parse(raw.toString('utf8'));
       } catch {
         return reply.code(400).send({ error: { code: 'INVALID_JSON', message: 'Bad JSON' } });
+      }
+      const fresh = await recordWebhookDelivery(prisma, {
+        source: 'intake:zalo',
+        rawBody: raw,
+        signature,
+      });
+      if (!fresh) {
+        return reply.code(409).send({ error: { code: 'WEBHOOK_REPLAY', message: 'Duplicate delivery' } });
       }
       const msg = parseZaloMessage(payload);
       await handleInbound('ZALO', msg ? [msg] : [], payload);
@@ -155,6 +178,11 @@ export async function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRou
 
   // ---- Consultant views (authenticated) -------------------------------------
   const readGuard = rbacGuard(() => ({ module: 'lead_management', action: 'read' }));
+  // /simulate WRITES (creates a Lead/IntakeConversation), so it must require a
+  // write capability — not the read scope. Under the pure RBAC policy SALES is
+  // assigned-only on lead_management writes; with no resource owner here it is
+  // effectively ADMIN-only, which is correct for a test/widget inject endpoint.
+  const createGuard = rbacGuard(() => ({ module: 'lead_management', action: 'create' }));
 
   app.get(
     '/api/v1/intake/conversations',
@@ -181,7 +209,7 @@ export async function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRou
   // Simulate an inbound message (testing / website widget): drives the same flow.
   app.post(
     '/api/v1/intake/simulate',
-    { preHandler: [auth, readGuard] },
+    { preHandler: [auth, createGuard] },
     async (request, reply) => {
       const body = (request.body ?? {}) as Record<string, unknown>;
       const externalUserId = asString(body.externalUserId);

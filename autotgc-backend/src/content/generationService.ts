@@ -17,6 +17,12 @@ import { stripCodeFences } from '../strategy/personaService';
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
 
+/**
+ * Output-token cap for a standard content draft (title + body + CTAs). Bounds
+ * worst-case AI latency without truncating a well-formed draft.
+ */
+export const DRAFT_MAX_TOKENS = 2000;
+
 /** Allowed content objectives (Req 6.4). */
 export type Objective = 'Lead' | 'View' | 'Follow';
 const OBJECTIVES: ReadonlySet<string> = new Set<Objective>(['Lead', 'View', 'Follow']);
@@ -218,7 +224,8 @@ export class GenerationService {
     const prompt = buildPrompt(inputs, complete ? ctx : null);
 
     // A Gemini failure must persist nothing and surface the error (Req 6.10).
-    const text = await this.gemini.generateContent(prompt);
+    // Cap output tokens to bound worst-case latency for a standard draft.
+    const text = await this.gemini.generateContent(prompt, { maxTokens: DRAFT_MAX_TOKENS });
     const parsed = parseGeneratedContent(text);
 
     const draft = await this.prisma.contentDraft.create({
@@ -311,7 +318,7 @@ export class GenerationService {
     );
 
     // A Gemini failure must persist nothing and surface the error.
-    const text = await this.gemini.generateContent(prompt);
+    const text = await this.gemini.generateContent(prompt, { maxTokens: DRAFT_MAX_TOKENS });
     const parsed = parseGeneratedContent(text);
 
     // Overwrite the draft in place: replace CTAs, refresh title/body, reset the
@@ -378,10 +385,31 @@ export function parseGeneratedContent(text: string): GeneratedContent {
 
 function extractCtas(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value.map((c) => asString(c)).filter((c): c is string => c !== undefined);
+    return value
+      .map((c) => ctaToString(c))
+      .filter((c): c is string => c !== undefined);
   }
-  const single = asString(value);
+  const single = ctaToString(value);
   return single ? [single] : [];
+}
+
+/**
+ * Coerce one CTA entry to a string. The model is asked for an array of strings,
+ * but DeepSeek frequently returns CTA OBJECTS like
+ * `{ "text": "Đăng ký", "url": "...", "type": "button" }`. To avoid a spurious
+ * GEN_CTA_MISSING, accept a plain string OR pull the human-facing label from the
+ * common object fields (text/label/cta/title/name/value). Anything else → undefined.
+ */
+function ctaToString(value: unknown): string | undefined {
+  const direct = asString(value);
+  if (direct !== undefined) return direct;
+  if (isRecord(value)) {
+    for (const key of ['text', 'label', 'cta', 'title', 'name', 'value']) {
+      const s = asString(value[key]);
+      if (s !== undefined) return s;
+    }
+  }
+  return undefined;
 }
 
 /**

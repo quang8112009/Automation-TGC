@@ -160,7 +160,7 @@ export function JobOrders() {
       {/* Table */}
       <div className="card">
         {ordersQuery.isLoading ? (
-          <Loading label="Đang tải…" />
+          <Loading variant="table" rows={8} />
         ) : ordersQuery.error ? (
           <ErrorMessage error={ordersQuery.error} />
         ) : ordersQuery.data && ordersQuery.data.items.length > 0 ? (
@@ -174,7 +174,7 @@ export function JobOrders() {
                     <th>Ngành</th>
                     <th>Thị trường</th>
                     <th>Diện visa</th>
-                    <th>SL</th>
+                    <th className="data__num">SL</th>
                     <th>Lương</th>
                     <th>Trạng thái</th>
                     <th>Hạn</th>
@@ -189,7 +189,7 @@ export function JobOrders() {
                       <td>{order.industry || '—'}</td>
                       <td>{marketLabel(order.market)}</td>
                       <td>{visaTypeLabel(order.visaType)}</td>
-                      <td>{order.quantity}</td>
+                      <td className="data__num">{order.quantity}</td>
                       <td>{order.salaryText || '—'}</td>
                       <td>
                         <JobOrderStatusBadge status={order.status} />
@@ -229,7 +229,18 @@ export function JobOrders() {
             />
           </>
         ) : (
-          <Empty label="Không có đơn hàng nào khớp bộ lọc." />
+          <Empty
+            icon="clipboard-list"
+            label="Không có đơn hàng nào khớp bộ lọc."
+            action={
+              isAdmin ? (
+                <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+                  <Icon name="plus" size={16} />
+                  Đơn hàng mới
+                </button>
+              ) : undefined
+            }
+          />
         )}
       </div>
 

@@ -23,6 +23,7 @@ import {
   startAutopilot,
 } from '../api/autopilot';
 import { useRealtime } from '../realtime/RealtimeContext';
+import { PersonaPicker } from '../components/PersonaPicker';
 import { ErrorMessage, Loading, StatusBadge, SuccessMessage, formatDate } from '../components/ui';
 import {
   AUTOPILOT_STEP_LABELS,
@@ -52,7 +53,7 @@ export function Autopilot() {
         </div>
       </div>
 
-      <div className="muted" style={{ marginBottom: 16, maxWidth: 760 }}>
+      <div className="muted" style={{ marginBottom: 'var(--space-md)', maxWidth: '70ch' }}>
         Vòng lặp tự động hóa marketing: nghiên cứu xu hướng → lập kế hoạch → tạo nội dung & tài sản →
         cổng phê duyệt (con người) → lên lịch đăng → tổng kết. Theo nguyên tắc “chất lượng hơn số
         lượng”, run sẽ dừng tại cổng phê duyệt để con người duyệt nội dung trước khi lên lịch.
@@ -143,6 +144,7 @@ function StartAutopilotCard({ onStarted }: { onStarted: (id: string) => void }) 
         <div className="field">
           <label>Persona IDs (tùy chọn, phân tách bằng dấu phẩy)</label>
           <input value={personaIds} onChange={(e) => setPersonaIds(e.target.value)} />
+          <PersonaPicker value={personaIds} onChange={setPersonaIds} />
         </div>
       </div>
 
@@ -152,7 +154,7 @@ function StartAutopilotCard({ onStarted }: { onStarted: (id: string) => void }) 
           {MARKETING_CHANNELS.map((c) => (
             <label
               key={c}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0, minWidth: 130 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', margin: 0, minWidth: 130 }}
             >
               <input
                 type="checkbox"
@@ -162,7 +164,7 @@ function StartAutopilotCard({ onStarted }: { onStarted: (id: string) => void }) 
               />
               {MARKETING_CHANNEL_LABELS[c]}
               {!SCHEDULABLE_CHANNELS.has(c) && (
-                <span className="muted" style={{ fontSize: 11 }} title="Được tạo nội dung nhưng chưa lên lịch tự động">
+                <span className="muted" style={{ fontSize: 'var(--fs-xs)' }} title="Được tạo nội dung nhưng chưa lên lịch tự động">
                   (chỉ tạo)
                 </span>
               )}
@@ -172,7 +174,7 @@ function StartAutopilotCard({ onStarted }: { onStarted: (id: string) => void }) 
       </div>
 
       <div className="field">
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
           <input
             type="checkbox"
             style={{ width: 'auto' }}
@@ -258,7 +260,7 @@ function RunTimeline({ runId }: { runId: string }) {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
         <h2 className="card-title" style={{ margin: 0 }}>
           Run {run.id}
         </h2>
@@ -266,7 +268,7 @@ function RunTimeline({ runId }: { runId: string }) {
         {!isTerminal && <span className="muted">đang theo dõi…</span>}
       </div>
 
-      <dl className="kv" style={{ marginTop: 12 }}>
+      <dl className="kv" style={{ marginTop: 'var(--space-md)' }}>
         <dt>Bước hiện tại</dt>
         <dd>{run.currentStep ? autopilotStepLabel(run.currentStep) : '—'}</dd>
         <dt>Tạo lúc</dt>
@@ -280,12 +282,14 @@ function RunTimeline({ runId }: { runId: string }) {
       </dl>
 
       {actionError != null && <ErrorMessage error={actionError} />}
+      {approveMutation.isSuccess && <SuccessMessage>Đã phê duyệt — run tiếp tục lên lịch.</SuccessMessage>}
+      {cancelMutation.isSuccess && <SuccessMessage>Đã hủy run.</SuccessMessage>}
 
       {awaitingApproval && (
-        <div className="notice" style={{ marginTop: 12 }}>
+        <div className="notice" style={{ marginTop: 'var(--space-md)' }}>
           <strong>Đang chờ phê duyệt.</strong> Run đã tạo xong nội dung và dừng tại cổng phê duyệt.
           Hãy duyệt nội dung trước khi hệ thống lên lịch đăng.
-          <div className="row-actions" style={{ marginTop: 10 }}>
+          <div className="row-actions" style={{ marginTop: 'var(--space-sm)' }}>
             <button
               className="btn btn--secondary"
               disabled={approveMutation.isPending}
@@ -305,7 +309,7 @@ function RunTimeline({ runId }: { runId: string }) {
       )}
 
       {!awaitingApproval && !isTerminal && (
-        <div className="row-actions" style={{ margin: '12px 0' }}>
+        <div className="row-actions" style={{ margin: 'var(--space-md) 0' }}>
           <button
             className="btn btn-danger"
             disabled={cancelMutation.isPending}
@@ -316,12 +320,12 @@ function RunTimeline({ runId }: { runId: string }) {
         </div>
       )}
 
-      <h3 style={{ marginTop: 16 }}>Tiến trình</h3>
+      <h3 style={{ marginTop: 'var(--space-md)' }}>Tiến trình</h3>
       <StepTimeline run={run} />
 
       {summary && (
         <>
-          <h3 style={{ marginTop: 16 }}>Tổng kết</h3>
+          <h3 style={{ marginTop: 'var(--space-md)' }}>Tổng kết</h3>
           <div className="grid grid-4">
             <div className="stat">
               <div className="stat-label">Đã tạo</div>
@@ -337,7 +341,7 @@ function RunTimeline({ runId }: { runId: string }) {
             </div>
             <div className="stat">
               <div className="stat-label">Thị trường</div>
-              <div className="stat-value" style={{ fontSize: 18 }}>
+              <div className="stat-value" style={{ fontSize: 'var(--fs-h3)' }}>
                 {marketingMarketLabel(summary.market)}
               </div>
             </div>
@@ -372,7 +376,7 @@ function StepTimeline({ run }: { run: WorkflowRun }) {
           <div style={{ flex: 1 }}>
             <strong>{AUTOPILOT_STEP_LABELS[s.name] ?? s.name}</strong>
             {s.name === 'review_gate' && (
-              <div className="muted" style={{ fontSize: 12 }}>
+              <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
                 Cổng phê duyệt của con người
               </div>
             )}
@@ -410,7 +414,7 @@ function StepOutput({ output }: { output: unknown }) {
 
   if (parts.length === 0) return null;
   return (
-    <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+    <div className="muted" style={{ fontSize: 'var(--fs-xs)', marginTop: 'var(--space-xs)' }}>
       {parts.join(' · ')}
     </div>
   );

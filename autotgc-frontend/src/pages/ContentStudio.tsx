@@ -11,9 +11,12 @@
  * Endpoints: GET /api/v1/generation/formats, POST /api/v1/generation/multi-format,
  * POST /api/v1/assets/from-draft.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { createAssetFromDraft, generateMultiFormat, getFormats } from '../api/marketing';
+import { createAssetFromDraft, getFormats, streamMultiFormat } from '../api/marketing';
+import type { MultiFormatInput } from '../api/marketing';
+import { ApiError } from '../lib/apiClient';
+import { PersonaPicker } from '../components/PersonaPicker';
 import { AiGroundingBadge } from '../components/AiGroundingBadge';
 import { Empty, ErrorMessage, Loading, SuccessMessage } from '../components/ui';
 import { AssetSpecView } from '../components/AssetSpecView';
@@ -40,37 +43,60 @@ export function ContentStudio() {
   const [keyword, setKeyword] = useState('');
   const [seoKeywords, setSeoKeywords] = useState('');
   const [result, setResult] = useState<MultiFormatResult | null>(null);
+  // Streaming state: live text as it arrives, in-flight flag, and any error.
+  const [streamingText, setStreamingText] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamError, setStreamError] = useState<ApiError | null>(null);
+  const abortRef = useRef<(() => void) | null>(null);
 
   const formats = formatsQuery.data?.formats ?? [];
   const meta = formatsQuery.data?.meta ?? {};
 
-  const generateMutation = useMutation({
-    mutationFn: () =>
-      generateMultiFormat({
-        format,
-        domainName: domainName.trim(),
-        personaIds: personaIds
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
-        objective,
-        market: market || undefined,
-        topic: topic.trim() || undefined,
-        keyword: keyword.trim() || undefined,
-        seoKeywords: seoKeywords
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
-      }),
-    onSuccess: (data) => setResult(data),
-  });
-
   const canSubmit =
-    domainName.trim().length > 0 && personaIds.trim().length > 0 && !generateMutation.isPending;
+    domainName.trim().length > 0 && personaIds.trim().length > 0 && !isStreaming;
 
   function submit() {
     setResult(null);
-    generateMutation.mutate();
+    setStreamError(null);
+    setStreamingText('');
+    setIsStreaming(true);
+
+    const input: MultiFormatInput = {
+      format,
+      domainName: domainName.trim(),
+      personaIds: personaIds
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      objective,
+      market: market || undefined,
+      topic: topic.trim() || undefined,
+      keyword: keyword.trim() || undefined,
+      seoKeywords: seoKeywords
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    };
+
+    abortRef.current = streamMultiFormat(input, {
+      onDelta: (text) => setStreamingText((prev) => prev + text),
+      onDone: (data) => {
+        setResult(data);
+        setIsStreaming(false);
+        abortRef.current = null;
+      },
+      onError: (err) => {
+        setStreamError(err);
+        setIsStreaming(false);
+        abortRef.current = null;
+      },
+    });
+  }
+
+  function cancel() {
+    abortRef.current?.();
+    abortRef.current = null;
+    setIsStreaming(false);
   }
 
   return (
@@ -84,13 +110,13 @@ export function ContentStudio() {
 
       <div className="card">
         <h2 className="card-title">Tạo nội dung đa định dạng</h2>
-        <div className="muted" style={{ marginBottom: 12 }}>
+        <div className="muted" style={{ marginBottom: 'var(--space-sm)' }}>
           Chọn định dạng, nhập domain + persona, mục tiêu và thị trường, rồi để AI (Gemini) tạo nội
           dung. Nếu máy chủ chưa cấu hình AI, hệ thống sẽ báo “Chưa cấu hình AI (Gemini)”.
         </div>
 
         {formatsQuery.isLoading ? (
-          <Loading label="Đang tải danh sách định dạng…" />
+          <Loading variant="card" rows={4} label="Đang tải danh sách định dạng…" />
         ) : formatsQuery.error ? (
           <ErrorMessage error={formatsQuery.error} />
         ) : (
@@ -106,7 +132,7 @@ export function ContentStudio() {
                   ))}
                 </select>
                 {meta[format]?.lengthHint && (
-                  <div className="muted" style={{ marginTop: 4 }}>
+                  <div className="muted" style={{ marginTop: 'var(--space-xs)' }}>
                     {meta[format]?.lengthHint}
                   </div>
                 )}
@@ -136,6 +162,7 @@ export function ContentStudio() {
                   onChange={(e) => setPersonaIds(e.target.value)}
                   placeholder="persona-id-1, persona-id-2"
                 />
+                <PersonaPicker value={personaIds} onChange={setPersonaIds} />
               </div>
               <div className="field">
                 <label>Thị trường</label>
@@ -169,15 +196,41 @@ export function ContentStudio() {
               />
             </div>
             <button className="btn btn-primary" disabled={!canSubmit} onClick={submit}>
-              {generateMutation.isPending ? 'Đang tạo nội dung…' : 'Tạo nội dung'}
+              {isStreaming ? 'Đang tạo nội dung…' : 'Tạo nội dung'}
             </button>
+            {isStreaming && (
+              <button className="btn" onClick={cancel} style={{ marginLeft: 'var(--space-sm)' }}>
+                Hủy
+              </button>
+            )}
           </>
         )}
       </div>
 
-      {generateMutation.error != null && <ErrorMessage error={generateMutation.error} />}
+      {streamError != null && <ErrorMessage error={streamError} />}
 
-      {result != null && <DraftResult result={result} />}
+      {/* Live streaming view: shows text as the model writes it. While streaming
+          (and before the final parsed draft arrives) we render the raw stream so
+          the user sees immediate progress instead of a long spinner. */}
+      {isStreaming && (
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
+            <h2 className="card-title" style={{ margin: 0 }}>
+              Đang soạn nội dung…
+            </h2>
+            <span className="badge badge-gray">{contentFormatLabel(format)}</span>
+          </div>
+          {streamingText.length === 0 ? (
+            <div className="muted">AI đang suy nghĩ… nội dung sẽ hiện ngay khi bắt đầu được viết.</div>
+          ) : (
+            <pre className="code" style={{ whiteSpace: 'pre-wrap' }}>
+              {streamingText}
+            </pre>
+          )}
+        </div>
+      )}
+
+      {!isStreaming && result != null && <DraftResult result={result} />}
     </div>
   );
 }
@@ -194,7 +247,7 @@ function DraftResult({ result }: { result: MultiFormatResult }) {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)', flexWrap: 'wrap' }}>
         <h2 className="card-title" style={{ margin: 0 }}>
           {draft.title}
         </h2>
@@ -211,9 +264,9 @@ function DraftResult({ result }: { result: MultiFormatResult }) {
         {draft.body}
       </pre>
 
-      <h3 style={{ marginTop: 16 }}>Lời kêu gọi hành động (CTA)</h3>
+      <h3 style={{ marginTop: 'var(--space-md)' }}>Lời kêu gọi hành động (CTA)</h3>
       {draft.ctas.length === 0 ? (
-        <Empty label="Không có CTA." />
+        <Empty icon="send" label="Không có CTA." />
       ) : (
         <ul>
           {draft.ctas.map((c) => (
@@ -222,8 +275,8 @@ function DraftResult({ result }: { result: MultiFormatResult }) {
         </ul>
       )}
 
-      <h3 style={{ marginTop: 16 }}>Tạo tài sản thương hiệu từ nháp này</h3>
-      <div className="muted" style={{ marginBottom: 8 }}>
+      <h3 style={{ marginTop: 'var(--space-md)' }}>Tạo tài sản thương hiệu từ nháp này</h3>
+      <div className="muted" style={{ marginBottom: 'var(--space-sm)' }}>
         Tài sản được trả về dưới dạng <strong>bản thiết kế (SPEC_READY)</strong> — chưa render thành
         ảnh/video khi máy chủ chưa cấu hình nhà cung cấp render.
       </div>

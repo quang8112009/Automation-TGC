@@ -49,7 +49,7 @@ export function Intake() {
         </div>
       </div>
 
-      <p className="muted" style={{ marginTop: -8 }}>
+      <p className="muted" style={{ marginTop: 'calc(-1 * var(--space-sm))' }}>
         Chatbot tự hỏi khách trên Facebook / Zalo theo kịch bản hồ sơ, lưu câu trả lời về hệ thống
         và tạo Lead. Dưới đây là các hội thoại đã/đang thu thập.
       </p>
@@ -73,7 +73,7 @@ export function Intake() {
             </div>
 
             {listQuery.isLoading ? (
-              <Loading label="Đang tải…" />
+              <Loading variant="table" rows={6} />
             ) : listQuery.error ? (
               <ErrorMessage error={listQuery.error} />
             ) : listQuery.data && listQuery.data.items.length > 0 ? (
@@ -92,7 +92,11 @@ export function Intake() {
                       <tr
                         key={c.id}
                         onClick={() => setSelectedId(c.id)}
-                        style={{ cursor: 'pointer', background: selectedId === c.id ? 'var(--surface-sunken, #f6f6f6)' : undefined }}
+                        aria-selected={selectedId === c.id}
+                        style={{
+                          cursor: 'pointer',
+                          background: selectedId === c.id ? 'var(--surface-active)' : undefined,
+                        }}
                       >
                         <td>{CHANNEL_LABEL[c.channel] ?? c.channel}</td>
                         <td>{c.displayName || c.externalUserId}</td>
@@ -134,10 +138,10 @@ function ConversationDetail({ id }: { id: string }) {
     queryFn: () => getConversation(id),
   });
 
-  if (q.isLoading) return <div className="card"><Loading label="Đang tải…" /></div>;
+  if (q.isLoading) return <div className="card"><Loading label="Đang tải hội thoại…" /></div>;
   if (q.error) return <div className="card"><ErrorMessage error={q.error} /></div>;
   const convo = q.data as IntakeConversation | null;
-  if (!convo) return <div className="card"><Empty label="Không tìm thấy hội thoại." /></div>;
+  if (!convo) return <div className="card"><Empty label="Không tìm thấy hội thoại." icon="bot" /></div>;
 
   const collected = convo.collected ?? {};
   const entries = Object.entries(collected);
@@ -149,7 +153,7 @@ function ConversationDetail({ id }: { id: string }) {
         <span className={`badge ${STATUS_BADGE[convo.status]}`}>{STATUS_LABEL[convo.status]}</span>
       </h2>
 
-      <h3 style={{ fontSize: 'var(--fs-h3)', margin: '8px 0' }}>Hồ sơ đã thu thập</h3>
+      <h3 style={{ fontSize: 'var(--fs-h3)', margin: 'var(--space-sm) 0' }}>Hồ sơ đã thu thập</h3>
       {entries.length === 0 ? (
         <div className="muted">Chưa có dữ liệu.</div>
       ) : (
@@ -163,12 +167,12 @@ function ConversationDetail({ id }: { id: string }) {
         </dl>
       )}
       {convo.leadId && (
-        <div className="success-box" style={{ marginTop: 10 }}>
+        <div className="success-box" style={{ marginTop: 'var(--space-sm)' }}>
           Đã tạo Lead: <code>{convo.leadId}</code>
         </div>
       )}
 
-      <h3 style={{ fontSize: 'var(--fs-h3)', margin: '14px 0 8px' }}>Tin nhắn</h3>
+      <h3 style={{ fontSize: 'var(--fs-h3)', margin: 'var(--space-md) 0 var(--space-sm)' }}>Tin nhắn</h3>
       <div className="steps-list">
         {(convo.messages ?? []).map((m) => (
           <div
@@ -184,9 +188,11 @@ function ConversationDetail({ id }: { id: string }) {
             </div>
             <div
               style={{
-                background: m.direction === 'OUTBOUND' ? 'var(--surface-sunken, #f0f0f0)' : 'var(--color-gold, #e8d8b0)',
-                borderRadius: 8,
-                padding: '6px 10px',
+                background:
+                  m.direction === 'OUTBOUND' ? 'var(--surface-sunken)' : 'var(--color-gold-soft)',
+                color: 'var(--text-body)',
+                borderRadius: 'var(--radius-lg)',
+                padding: 'var(--space-xs) var(--space-sm)',
                 maxWidth: '85%',
                 whiteSpace: 'pre-wrap',
               }}
@@ -236,11 +242,11 @@ function SimulatePanel({ onCompleted }: { onCompleted: () => void }) {
         thật). Gõ "xin chào" để bắt đầu.
       </p>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
-      <div className="steps-list" style={{ marginBottom: 10 }}>
+      <div className="steps-list" style={{ marginBottom: 'var(--space-sm)' }}>
         {thread.map((m, i) => (
           <div key={i} className="step-row" style={{ flexDirection: 'column', alignItems: m.who === 'Bot' ? 'flex-start' : 'flex-end' }}>
             <div className="muted" style={{ fontSize: 'var(--fs-xs)' }}>{m.who}</div>
-            <div style={{ background: m.who === 'Bot' ? 'var(--surface-sunken, #f0f0f0)' : 'var(--color-gold, #e8d8b0)', borderRadius: 8, padding: '6px 10px', maxWidth: '85%', whiteSpace: 'pre-wrap' }}>
+            <div style={{ background: m.who === 'Bot' ? 'var(--surface-sunken)' : 'var(--color-gold-soft)', color: 'var(--text-body)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-xs) var(--space-sm)', maxWidth: '85%', whiteSpace: 'pre-wrap' }}>
               {m.text}
             </div>
           </div>
@@ -248,7 +254,9 @@ function SimulatePanel({ onCompleted }: { onCompleted: () => void }) {
       </div>
       <div className="toolbar">
         <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="intake-simulate-input">Tin nhắn thử</label>
           <input
+            id="intake-simulate-input"
             value={text}
             placeholder='VD: "xin chào" rồi trả lời từng câu hỏi'
             onChange={(e) => setText(e.target.value)}

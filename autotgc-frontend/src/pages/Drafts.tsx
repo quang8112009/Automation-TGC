@@ -30,6 +30,7 @@ import {
   SuccessMessage,
 } from '../components/ui';
 import { Icon } from '../components/Icon';
+import { PersonaPicker } from '../components/PersonaPicker';
 
 export function Drafts() {
   const queryClient = useQueryClient();
@@ -61,7 +62,7 @@ export function Drafts() {
 
       <div className="card">
         {draftsQuery.isLoading ? (
-          <Loading />
+          <Loading variant="table" rows={6} />
         ) : draftsQuery.error ? (
           <ErrorMessage error={draftsQuery.error} />
         ) : draftsQuery.data && draftsQuery.data.items.length > 0 ? (
@@ -100,7 +101,16 @@ export function Drafts() {
             />
           </>
         ) : (
-          <Empty label="No drafts yet. Generate one to get started." />
+          <Empty
+            label="No drafts yet. Generate one to get started."
+            icon="file-text"
+            action={
+              <button className="btn btn-primary btn-sm" onClick={() => setShowGenerate(true)}>
+                <Icon name="plus" size={16} />
+                Generate Draft
+              </button>
+            }
+          />
         )}
       </div>
 
@@ -153,6 +163,7 @@ function GenerateModal({ onClose, onDone }: { onClose: () => void; onDone: () =>
       <div className="field">
         <label>Persona IDs (comma-separated)</label>
         <input value={personaIds} onChange={(e) => setPersonaIds(e.target.value)} />
+        <PersonaPicker value={personaIds} onChange={setPersonaIds} />
       </div>
       <div className="field">
         <label>Objective</label>
@@ -287,7 +298,7 @@ function DraftDetailModal({
         <>
           {message && <SuccessMessage>{message}</SuccessMessage>}
           {anyError != null && <ErrorMessage error={anyError} />}
-          <div style={{ marginBottom: 10 }}>
+          <div style={{ marginBottom: 'var(--space-sm)' }}>
             Status: <StatusBadge status={data.status} />
             {!editable && (
               <span className="muted"> · only DRAFT status is editable</span>

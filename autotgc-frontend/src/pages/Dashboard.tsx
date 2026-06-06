@@ -32,6 +32,7 @@ import type {
 } from '../lib/types';
 import { Icon } from '../components/Icon';
 import {
+  Empty,
   ErrorMessage,
   Loading,
   StatCard,
@@ -129,7 +130,19 @@ export function Dashboard() {
     },
   });
 
-  if (isLoading) return <Loading />;
+  if (isLoading) {
+    // State-shaped loading: a KPI row skeleton over a table-row skeleton, so the
+    // placeholder matches the dashboard's final shape (Req 8.1) instead of a
+    // generic spinner.
+    return (
+      <div className="reveal">
+        <Loading variant="kpi" cols={4} />
+        <div style={{ marginTop: 'var(--space-lg)' }}>
+          <Loading variant="table" rows={5} />
+        </div>
+      </div>
+    );
+  }
   if (error) return <ErrorMessage error={error} />;
   if (!data) return null;
 
@@ -207,7 +220,7 @@ function AdminDashboard({
 
   return (
     <>
-      <div className="grid grid-4" style={{ marginBottom: 18 }}>
+      <div className="grid grid-4 section">
         <StatCard label="Tổng số Lead" count={kpis.totalLeads} />
         <StatCard
           label="Chờ duyệt"
@@ -222,10 +235,10 @@ function AdminDashboard({
         <StatCard label="Bài đăng lỗi" count={failedPosts.length} valueColor={failedPosts.length ? 'var(--danger)' : undefined} />
       </div>
 
-      <div className="card" style={{ marginBottom: 18 }}>
+      <div className="card">
         <h2 className="card-title">Phễu ứng viên</h2>
         {funnelEntries.length === 0 ? (
-          <div className="muted">Chưa có ứng viên nào.</div>
+          <Empty icon="users" label="Chưa có ứng viên nào." />
         ) : (
           <div className="inline-list">
             {funnelEntries.map(([stage, count]) => (
@@ -237,19 +250,19 @@ function AdminDashboard({
         )}
       </div>
 
-      <div className="card" style={{ marginBottom: 18 }}>
+      <div className="card">
         <h2 className="card-title">Hoạt động gần đây</h2>
         <RecentActivityList items={data.recentActivity} />
       </div>
 
-      <div className="card" style={{ marginBottom: 18 }}>
+      <div className="card">
         <h2 className="card-title">Hàng chờ duyệt</h2>
         {queueItems.length === 0 ? (
-          <div className="muted">Không có mục nào đang chờ duyệt.</div>
+          <Empty icon="clipboard-list" label="Không có mục nào đang chờ duyệt." />
         ) : (
           <>
             {isAdmin ? (
-              <div className="muted" style={{ fontSize: 'var(--fs-xs)', marginBottom: 8 }}>
+              <div className="muted" style={{ fontSize: 'var(--fs-xs)', marginBottom: 'var(--space-sm)' }}>
                 Kéo–thả để sắp xếp thứ tự ưu tiên.
               </div>
             ) : null}
@@ -306,7 +319,7 @@ function AdminDashboard({
           </>
         )}
         {reorderError ? (
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 'var(--space-sm)' }}>
             <ErrorMessage error={reorderError} />
           </div>
         ) : null}
@@ -316,7 +329,7 @@ function AdminDashboard({
         <div className="card">
           <h2 className="card-title">Bài sắp đăng</h2>
           {upcomingPosts.length === 0 ? (
-            <div className="muted">Không có bài đăng nào trong 7 ngày tới.</div>
+            <Empty icon="send" label="Không có bài đăng nào trong 7 ngày tới." />
           ) : (
             <div className="table-wrap">
               <table className="data">
@@ -346,7 +359,7 @@ function AdminDashboard({
         <div className="card">
           <h2 className="card-title">Cảnh báo bài đăng lỗi</h2>
           {failedPosts.length === 0 ? (
-            <div className="muted">Không có lỗi.</div>
+            <Empty icon="check" label="Không có lỗi." />
           ) : (
             <div className="table-wrap">
               <table className="data">
@@ -378,7 +391,7 @@ function AdminDashboard({
 /** The Recent_Activity_Feed list (ADMIN only) — newest first, full context (Req 6.6). */
 function RecentActivityList({ items }: { items: ActivityFeedItem[] }) {
   if (items.length === 0) {
-    return <div className="muted">Chưa có hoạt động nào.</div>;
+    return <Empty icon="file-text" label="Chưa có hoạt động nào." />;
   }
   return (
     <div className="table-wrap">
@@ -415,14 +428,14 @@ function SalesDashboard({ data }: { data: PersonalDashboardOverview }) {
 
   return (
     <>
-      <div className="grid grid-4" style={{ marginBottom: 18 }}>
+      <div className="grid grid-4 section">
         <StatCard label="Lead của tôi" count={kpis.totalLeads} />
       </div>
 
       <div className="card">
         <h2 className="card-title">Lead theo trạng thái</h2>
         {leadStatusEntries.length === 0 ? (
-          <div className="muted">Chưa có Lead nào được phân công.</div>
+          <Empty icon="users" label="Chưa có Lead nào được phân công." />
         ) : (
           <div className="inline-list">
             {leadStatusEntries.map(([status, count]) => (

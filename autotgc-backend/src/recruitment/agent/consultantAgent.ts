@@ -20,6 +20,7 @@ import type { KnowledgeEntry, JobOrder } from '@prisma/client';
 import type { ContentGenerator } from '../../strategy/personaService';
 import type { KnowledgeService } from '../knowledge/knowledgeService';
 import { COMPANY_IDENTITY } from '../knowledge/knowledgeBase';
+import { enforceAiGeneratedFlag } from '../../infra/aiOptional';
 
 /** Candidate context the consultant can use to tailor answers and matches. */
 export interface CandidateContext {
@@ -311,21 +312,33 @@ export class RecruitmentConsultantAgent {
    */
   async consult(question: string, candidate?: CandidateContext): Promise<ConsultResult> {
     const q = (question ?? '').trim();
-    const sources = q.length > 0 ? await this.knowledge.search(q, CONSULT_RETRIEVAL_LIMIT) : [];
+    // Graceful degradation (R5.8): a Knowledge_Base retrieval failure must not
+    // surface to the end user — degrade to no grounding and continue.
+    let sources: KnowledgeEntry[] = [];
+    if (q.length > 0) {
+      try {
+        sources = await this.knowledge.search(q, CONSULT_RETRIEVAL_LIMIT);
+      } catch {
+        sources = [];
+      }
+    }
 
     if (this.gemini) {
       const prompt = buildSystemPrompt(q, sources, candidate);
       try {
         const answer = await this.gemini.generateContent(prompt);
         if (answer && answer.trim().length > 0) {
-          return { answer: answer.trim(), sources, aiGenerated: true };
+          return enforceAiGeneratedFlag({ answer: answer.trim(), sources, aiGenerated: true }, 'AI');
         }
       } catch {
         // Fall through to the grounded fallback (covers AI_NOT_CONFIGURED too).
       }
     }
 
-    return { answer: buildGroundedAnswer(q, sources), sources, aiGenerated: false };
+    return enforceAiGeneratedFlag(
+      { answer: buildGroundedAnswer(q, sources), sources, aiGenerated: false },
+      'FALLBACK',
+    );
   }
 
   /** Pure pass-through to the ranking helper (no external calls). */
@@ -346,20 +359,31 @@ export class RecruitmentConsultantAgent {
     const query = [clean(jobOrder.industry), clean(jobOrder.market), clean(jobOrder.visaType)]
       .filter((x): x is string => x !== undefined)
       .join(' ');
-    const sources = query.length > 0 ? await this.knowledge.search(query, 3) : [];
+    // Graceful degradation (R5.8): tolerate a Knowledge_Base retrieval failure.
+    let sources: KnowledgeEntry[] = [];
+    if (query.length > 0) {
+      try {
+        sources = await this.knowledge.search(query, 3);
+      } catch {
+        sources = [];
+      }
+    }
 
     if (this.gemini) {
       const prompt = buildOutreachPrompt(candidate, jobOrder, sources);
       try {
         const message = await this.gemini.generateContent(prompt);
         if (message && message.trim().length > 0) {
-          return { message: message.trim(), aiGenerated: true };
+          return enforceAiGeneratedFlag({ message: message.trim(), aiGenerated: true }, 'AI');
         }
       } catch {
         // Fall through to the deterministic template.
       }
     }
 
-    return { message: buildOutreachFallback(candidate, jobOrder), aiGenerated: false };
+    return enforceAiGeneratedFlag(
+      { message: buildOutreachFallback(candidate, jobOrder), aiGenerated: false },
+      'FALLBACK',
+    );
   }
 }
