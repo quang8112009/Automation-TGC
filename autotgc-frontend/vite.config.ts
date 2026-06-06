@@ -32,5 +32,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    // Split rarely-changing vendor libraries into their own long-cached chunk.
+    // App code changes often (cache-busted on every deploy); React/router/query
+    // do not, so returning visitors re-use the cached vendor chunk and only
+    // re-download the small app + route chunks.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query': ['@tanstack/react-query'],
+        },
+      },
+    },
   },
 });
