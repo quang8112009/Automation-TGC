@@ -6,12 +6,15 @@
 # Password comes ONLY from $env:DEPLOY_PASSWORD (never written to disk / never
 # printed). Run from anywhere.
 param(
-  [string]$ServerHost = '36.50.26.118',
+  [Parameter(Mandatory = $true)]
+  [string]$ServerHost,
   [string]$BeTar = 'C:\Users\PC\Documents\docs\autotgc.tar.gz'
 )
 
 $ErrorActionPreference = 'Continue'
 Import-Module Posh-SSH -ErrorAction Stop
+
+$script:deployFailed = $false
 
 if (-not $env:DEPLOY_PASSWORD) { throw 'DEPLOY_PASSWORD env var is not set' }
 if (-not (Test-Path $BeTar)) { throw "Backend tarball not found: $BeTar" }
@@ -61,7 +64,21 @@ try {
   if (-not $done) { Write-Host '!!! redeploy did not reach DONE within timeout !!!' }
 
   Section 'POST-DEPLOY VERIFY (backend direct :3000)'
-  Run 'echo "HEALTHZ=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/healthz)" ; echo "READYZ_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/readyz)" ; echo "READYZ_BODY=$(curl -s http://127.0.0.1:3000/readyz)" ; echo "API_V1=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/v1)"'
+  $verify = Run 'echo "HEALTHZ=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/healthz)" ; echo "READYZ_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/readyz)" ; echo "READYZ_BODY=$(curl -s http://127.0.0.1:3000/readyz)" ; echo "API_V1=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/v1)"'
+
+  # Health gate: parse the HEALTHZ/READYZ codes and FAIL the run on non-200 so an
+  # unhealthy deploy never reports success (DONE alone is not a success signal).
+  $verifyText = ($verify.Output -join "`n")
+  $healthOk = $verifyText -match 'HEALTHZ=200'
+  $readyOk  = $verifyText -match 'READYZ_CODE=200'
+  if (-not ($healthOk -and $readyOk)) {
+    Write-Host "!!! DEPLOY VERIFY FAILED: healthz/readyz did not both return 200 !!!"
+    Write-Host "ROLLBACK: re-extract the previous good tarball to /opt/autotgc-src and re-run redeploy2.sh;"
+    Write-Host "          if the schema changed, restore Postgres from the pre-push backup in /var/backups/autotgc/."
+    $script:deployFailed = $true
+  } else {
+    Write-Host "DEPLOY VERIFY OK: healthz=200, readyz=200."
+  }
 
   Section 'VERIFY TIMEOUT FIX PRESENT IN BUILD (dist/infra/gemini.js)'
   Run 'grep -o "GEMINI_DEFAULT_TIMEOUT_MS\|timeoutMs" /opt/autotgc/dist/infra/gemini.js | sort -u ; echo "---" ; grep -o "AbortController\|timeoutMs" /opt/autotgc/dist/platforms/httpClient.js | sort -u'
@@ -75,3 +92,10 @@ finally {
   if ($script:sftp) { Remove-SFTPSession -SessionId $script:sftp.SessionId | Out-Null }
   Write-Host 'Sessions closed.'
 }
+
+# Non-zero exit on a failed health gate so CI / callers detect an unhealthy deploy.
+if ($script:deployFailed) {
+  Write-Host 'REDEPLOY RESULT: FAILED (see verify section above).'
+  exit 1
+}
+Write-Host 'REDEPLOY RESULT: OK.'

@@ -175,7 +175,7 @@ export async function registerRecruitmentRoutes(
     { preHandler: [auth, jobOrderTargetById('update')] },
     async (request, reply) => {
       const { id } = request.params as IdParams;
-      const order = await jobOrderService.update(id, (request.body ?? {}) as UpdateJobOrderInput);
+      const order = await jobOrderService.update(id, (request.body ?? {}) as UpdateJobOrderInput, getAuth(request));
       return reply.code(200).send(order);
     },
   );
@@ -185,7 +185,7 @@ export async function registerRecruitmentRoutes(
     { preHandler: [auth, jobOrderTargetById('update')] },
     async (request, reply) => {
       const { id } = request.params as IdParams;
-      const order = await jobOrderService.close(id);
+      const order = await jobOrderService.close(id, getAuth(request));
       return reply.code(200).send(order);
     },
   );

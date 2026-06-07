@@ -11,7 +11,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { AppConfig } from './infra/config';
 import type { JwtService } from './auth/jwt';
 import type { SecretLoader } from './infra/secrets';
-import { toErrorBody } from './infra/errors';
+import { toErrorBody, ALLOWED_STATUS_CODES } from './infra/errors';
 import { registerRoutes } from './routes';
 import type { ComposedServices } from './infra/services';
 import { registerPlatformTokenRoutes } from './platforms/routes';
@@ -110,14 +110,23 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
     // carry their own statusCode; honor any non-5xx the plugin set.
     const pluginStatus = typeof anyErr.statusCode === 'number' ? anyErr.statusCode : undefined;
     if (pluginStatus && pluginStatus >= 400 && pluginStatus < 500) {
+      // Honor the plugin's 4xx, but never emit a status outside the allowed set
+      // (Req 19.1). Fastify core can raise 413 (payload too large) / 415
+      // (unsupported media type), which are not in our taxonomy — coerce those
+      // to 400. 429 (rate-limit) is the one intentional exception and is allowed
+      // through as-is.
+      const allowedStatus =
+        pluginStatus === 429 || ALLOWED_STATUS_CODES.has(pluginStatus)
+          ? pluginStatus
+          : 400;
       const code =
-        pluginStatus === 429
+        allowedStatus === 429
           ? 'RATE_LIMITED'
           : typeof anyErr.code === 'string' && anyErr.code.length > 0
             ? anyErr.code
             : 'BAD_REQUEST';
       const msg = err instanceof Error ? err.message : 'Request rejected';
-      reply.code(pluginStatus).send({ error: { code, message: deps.redact(msg) } });
+      reply.code(allowedStatus).send({ error: { code, message: deps.redact(msg) } });
       return;
     }
     const { status, body } = toErrorBody(err, deps.redact);

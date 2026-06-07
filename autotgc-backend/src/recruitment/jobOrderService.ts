@@ -145,10 +145,16 @@ export class JobOrderService {
     return this.prisma.jobOrder.create({ data });
   }
 
-  async update(id: string, input: UpdateJobOrderInput): Promise<JobOrder> {
+  async update(id: string, input: UpdateJobOrderInput, actor: AuthInfo): Promise<JobOrder> {
     const current = await this.prisma.jobOrder.findUnique({ where: { id } });
     if (!current) {
       throw new NotFoundError('Job order not found');
+    }
+    // SALES assigned-only re-check (defense-in-depth): the route guard allows an
+    // UNASSIGNED order (ownerUserId undefined) through, so without this a SALES
+    // user could modify any order not yet assigned to anyone. Mirrors get().
+    if (actor.role === 'SALES' && current.assignedTo !== actor.userId) {
+      throw new ForbiddenError();
     }
     const enums = this.validateEnums(input);
     const deadline = parseDeadline(input.deadline);
@@ -237,18 +243,23 @@ export class JobOrderService {
     return this.prisma.jobOrder.findMany({ where, orderBy: { createdAt: 'desc' } });
   }
 
-  async close(id: string): Promise<JobOrder> {
-    return this.setStatus(id, 'CLOSED');
+  async close(id: string, actor: AuthInfo): Promise<JobOrder> {
+    return this.setStatus(id, 'CLOSED', actor);
   }
 
-  async pause(id: string): Promise<JobOrder> {
-    return this.setStatus(id, 'PAUSED');
+  async pause(id: string, actor: AuthInfo): Promise<JobOrder> {
+    return this.setStatus(id, 'PAUSED', actor);
   }
 
-  private async setStatus(id: string, status: JobOrderStatusValue): Promise<JobOrder> {
+  private async setStatus(id: string, status: JobOrderStatusValue, actor: AuthInfo): Promise<JobOrder> {
     const current = await this.prisma.jobOrder.findUnique({ where: { id } });
     if (!current) {
       throw new NotFoundError('Job order not found');
+    }
+    // SALES assigned-only re-check (mirrors update()/get()): fail-closed on an
+    // unassigned order so a status change cannot bypass ownership scoping.
+    if (actor.role === 'SALES' && current.assignedTo !== actor.userId) {
+      throw new ForbiddenError();
     }
     return this.prisma.jobOrder.update({ where: { id }, data: { status } });
   }

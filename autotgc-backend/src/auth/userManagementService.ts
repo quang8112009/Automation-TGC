@@ -86,13 +86,30 @@ export class UserManagementService {
     return toManagedUserView(user);
   }
 
-  /** Req 5.5: lock an account. 404 if not found. */
+  /**
+   * Revoke every ACTIVE JWT session for a user so existing access/refresh tokens
+   * stop working immediately. Without this, `requireAuth` keeps accepting a
+   * still-valid token (up to the access TTL) and `/api/auth/refresh` keeps
+   * minting new ones for the refresh TTL, defeating lock/role-change/password-
+   * reset as incident-containment actions. Mirrors AuthService.logout's
+   * status->REVOKED + revokedAt write, but across all of the user's sessions.
+   */
+  private async revokeActiveSessions(userId: string): Promise<void> {
+    await this.prisma.jwtSession.updateMany({
+      where: { userId, status: 'ACTIVE' },
+      data: { status: 'REVOKED', revokedAt: new Date() },
+    });
+  }
+
+  /** Req 5.5: lock an account. 404 if not found. Also revokes active sessions. */
   async lock(userId: string): Promise<ManagedUserView> {
     await this.requireUser(userId);
     const user = await this.prisma.userAccount.update({
       where: { id: userId },
       data: { locked: true, lockedAt: new Date() },
     });
+    // Locking must terminate the user's live tokens, not just block future logins.
+    await this.revokeActiveSessions(userId);
     return toManagedUserView(user);
   }
 
@@ -116,12 +133,17 @@ export class UserManagementService {
       where: { id: userId },
       data: { role },
     });
+    // A role change must not be carried by an old token whose `role` claim still
+    // reflects the previous role; force re-login so the new role takes effect.
+    await this.revokeActiveSessions(userId);
     return toManagedUserView(user);
   }
 
   /**
    * Req 5.8: reset password. Validates non-blank, stores an argon2 hash, and
-   * never persists plaintext. 404 if not found.
+   * never persists plaintext. 404 if not found. Also revokes active sessions so
+   * a reset (often a compromise response) invalidates any tokens the previous
+   * password's holder still has.
    */
   async resetPassword(userId: string, newPassword: string): Promise<void> {
     if (!isNonBlank(newPassword)) {
@@ -133,6 +155,7 @@ export class UserManagementService {
       where: { id: userId },
       data: { passwordHash },
     });
+    await this.revokeActiveSessions(userId);
   }
 
   /** Throws NotFoundError (404) when the account does not exist. */

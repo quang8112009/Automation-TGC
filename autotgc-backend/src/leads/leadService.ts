@@ -443,7 +443,7 @@ export class LeadService {
     const body = [header, ...rows].join('\n');
 
     return {
-      filename: `leads-export.${format === 'xlsx' ? 'csv' : 'csv'}`,
+      filename: 'leads-export.csv',
       contentType: format === 'xlsx' ? 'application/vnd.ms-excel' : 'text/csv',
       body,
     };

@@ -110,11 +110,18 @@ function fakePrisma(seed: UserRow[] = []): {
       },
     },
     // Used by AuthService.login on success; harmless for the locked-account path.
+    // `updateMany` backs UserManagementService session revocation on
+    // lock/changeRole/resetPassword — the fake records the last call so tests can
+    // assert sessions were revoked.
     jwtSession: {
       create: async (args: { data: Record<string, unknown> }) => ({
         sessionId: 'sess-1',
         ...args.data,
       }),
+      updateMany: async (_args: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }) => ({ count: 0 }),
     },
   } as unknown as PrismaClient;
 

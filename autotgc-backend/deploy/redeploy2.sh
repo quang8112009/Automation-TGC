@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Re-sync, install, append new env keys, db push (adds new models), build, restart.
-set -uo pipefail
+#
+# `set -e` ADDED: previously this ran with only `set -uo pipefail`, so a failed
+# install/generate/db-push/build did NOT abort and the script still printed DONE
+# and restarted PM2 with a possibly broken build. With -e, any unguarded failure
+# aborts; steps that are allowed to fail carry an explicit `|| true`.
+set -euo pipefail
 APP_DIR=/opt/autotgc
 SRC_DIR=/opt/autotgc-src
 
@@ -24,6 +29,23 @@ add_key DB_CONNECTION_LIMIT "10"
 chmod 600 "${APP_DIR}/.env"; chown autotgc:autotgc "${APP_DIR}/.env"
 
 echo "=== prisma generate + db push (adds ServiceAccount/ServicePermission/LeadAssignment) ==="
+# SAFETY: `db push --accept-data-loss` is DESTRUCTIVE — on any schema drift it can
+# DROP columns/tables to match schema.prisma, with no migration record and no
+# rollback. Take a timestamped Postgres backup FIRST so a bad diff is recoverable.
+# (Planned: migrate this path to reviewed `prisma migrate deploy` — see
+# prisma/migrations/MIGRATION-BASELINE-RUNBOOK.md. Not switched here.)
+echo "=== pre-push Postgres backup ==="
+BACKUP_DIR=/var/backups/autotgc
+mkdir -p "${BACKUP_DIR}"
+BACKUP_FILE="${BACKUP_DIR}/autotgc-$(date +%Y%m%d-%H%M%S).sql"
+# Derive connection from the app's .env DATABASE_URL; pg_dump must succeed before
+# we allow the destructive push. If the backup fails, abort (set -e + explicit check).
+if sudo -u autotgc bash -lc "cd ${APP_DIR} && set -a && . ./.env && set +a && pg_dump \"\$DATABASE_URL\"" > "${BACKUP_FILE}" 2>/tmp/pgdump.err; then
+  echo "BACKUP_OK=${BACKUP_FILE} ($(wc -c < "${BACKUP_FILE}") bytes)"
+else
+  echo "BACKUP_FAILED — refusing to run destructive db push. See /tmp/pgdump.err:"; tail -5 /tmp/pgdump.err
+  exit 1
+fi
 sudo -u autotgc bash -lc "cd ${APP_DIR} && npx prisma generate 2>&1 | tail -2 && npx prisma db push --skip-generate --accept-data-loss 2>&1 | tail -8"
 
 echo "=== build ==="
