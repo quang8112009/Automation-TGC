@@ -265,11 +265,11 @@ function DraftResult({ result }: { result: MultiFormatResult }) {
       </pre>
 
       <h3 style={{ marginTop: 'var(--space-md)' }}>Lời kêu gọi hành động (CTA)</h3>
-      {draft.ctas.length === 0 ? (
+      {(draft.ctas ?? []).length === 0 ? (
         <Empty icon="send" label="Không có CTA." />
       ) : (
         <ul>
-          {draft.ctas.map((c) => (
+          {(draft.ctas ?? []).map((c) => (
             <li key={c.id}>{c.ctaText}</li>
           ))}
         </ul>

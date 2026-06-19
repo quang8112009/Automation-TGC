@@ -76,16 +76,16 @@ export function AiConsultant() {
           </pre>
 
           <h3 style={{ marginTop: 'var(--space-lg)' }}>
-            Nguồn tham khảo từ cơ sở tri thức ({result.sources.length})
+            Nguồn tham khảo từ cơ sở tri thức ({(result.sources ?? []).length})
           </h3>
-          {result.sources.length === 0 ? (
+          {(result.sources ?? []).length === 0 ? (
             <div className="muted">
               Không tìm thấy nội dung nền phù hợp. Hãy bổ sung cơ sở tri thức hoặc liên hệ tư vấn
               trực tiếp.
             </div>
           ) : (
             <div className="steps-list">
-              {result.sources.map((s) => (
+              {(result.sources ?? []).map((s) => (
                 <div key={s.id} className="step-row" style={{ alignItems: 'flex-start' }}>
                   <div style={{ flex: 1 }}>
                     <div>

@@ -31,11 +31,11 @@ import type {
   ScopedNumber,
 } from '../lib/types';
 import { Icon } from '../components/Icon';
+import type { IconName } from '../components/Icon';
 import {
   Empty,
   ErrorMessage,
   Loading,
-  StatCard,
   StatusBadge,
   formatDate,
 } from '../components/ui';
@@ -182,15 +182,64 @@ export function Dashboard() {
 
 function DashboardHeader({ dataSync }: { dataSync: DashboardDataSync }) {
   return (
-    <div className="page-header">
-      <div>
-        <div className="eyebrow">Tổng quan</div>
-        <h1 className="page-title">Dashboard</h1>
+    <div className="page-head">
+      <div className="page-head__titles">
+        <h1 className="page-head__title">
+          Tổng quan <em>hoạt động</em>
+        </h1>
+        <p className="page-head__subtitle">
+          Theo dõi hiệu suất chiến dịch, KPI tuyển dụng và AI sinh nội dung.
+        </p>
       </div>
-      <span className={`badge ${dataSync.stale ? 'badge-yellow' : 'badge-green'}`}>
-        Data sync: {dataSync.status}
-        {dataSync.lastSync ? ` · ${formatDate(dataSync.lastSync)}` : ' · never'}
-      </span>
+      <div className="page-head__actions">
+        <span className={`badge ${dataSync.stale ? 'badge-yellow' : 'badge-green'}`}>
+          <span className="badge__dot" aria-hidden="true" />
+          Đồng bộ: {dataSync.status}
+          {dataSync.lastSync ? ` · ${formatDate(dataSync.lastSync)}` : ' · chưa có'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** KPI tile in the reference style: label + icon box, big mono value, delta row. */
+function KpiCard({
+  label,
+  value,
+  icon,
+  delta,
+  danger = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  icon: IconName;
+  delta?: { text: string; dir: 'up' | 'down' | 'flat' };
+  danger?: boolean;
+}) {
+  const deltaIcon: IconName =
+    delta?.dir === 'up' ? 'trending-up' : delta?.dir === 'down' ? 'trending-down' : 'minus';
+  return (
+    <div className={`kpi-card${danger ? ' kpi-card--danger' : ''}`}>
+      <div className="kpi-card__top">
+        <div>
+          <div className="kpi-card__label">{label}</div>
+          <div className="kpi-card__value">{value}</div>
+        </div>
+        <span className="kpi-card__icon" aria-hidden="true">
+          <Icon name={icon} size={20} />
+        </span>
+      </div>
+      {delta ? (
+        <div className="kpi-card__delta">
+          <span
+            className={`badge ${danger ? 'badge-red' : delta.dir === 'down' ? 'badge-gray' : 'badge-green'}`}
+          >
+            <Icon name={deltaIcon} size={12} />
+            {delta.text}
+          </span>
+          <span>so với tháng trước</span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -216,43 +265,65 @@ function AdminDashboard({
   const upcomingPosts = data.upcomingPosts ?? [];
   const failedPosts = data.alerts?.failedPosts ?? [];
   const queueItems = approvalQueue?.items ?? [];
-  const funnelEntries = Object.entries(kpis.candidateFunnel);
+  const funnelEntries = Object.entries(kpis.candidateFunnel ?? {});
+  const funnelMax = funnelEntries.reduce((m, [, c]) => Math.max(m, c), 0);
 
   return (
     <>
-      <div className="grid grid-4 section">
-        <StatCard label="Tổng số Lead" count={kpis.totalLeads} />
-        <StatCard
-          label="Chờ duyệt"
-          count={kpis.pendingApprovals}
-          hint={
+      <div className="kpi-grid">
+        <KpiCard label="Tổng số Lead" value={kpis.totalLeads.toLocaleString('vi-VN')} icon="user-plus" />
+        <KpiCard
+          label="Hồ sơ chờ duyệt"
+          value={kpis.pendingApprovals.toLocaleString('vi-VN')}
+          icon="clipboard-list"
+          delta={
             approvalQueue
-              ? `${approvalQueue.draftCount} bản nháp · ${approvalQueue.pendingInsightCount} insight`
+              ? { text: `${approvalQueue.draftCount} nháp`, dir: 'flat' }
               : undefined
           }
         />
-        <StatCard label="Tỷ lệ chuyển đổi" value={renderConversionRate(kpis.conversionRate)} />
-        <StatCard label="Bài đăng lỗi" count={failedPosts.length} valueColor={failedPosts.length ? 'var(--danger)' : undefined} />
+        <KpiCard
+          label="Tỷ lệ chuyển đổi"
+          value={renderConversionRate(kpis.conversionRate)}
+          icon="trending-up"
+        />
+        <KpiCard
+          label="Bài đăng lỗi"
+          value={failedPosts.length}
+          icon="alert-triangle"
+          danger={failedPosts.length > 0}
+        />
       </div>
 
-      <div className="card">
-        <h2 className="card-title">Phễu ứng viên</h2>
-        {funnelEntries.length === 0 ? (
-          <Empty icon="users" label="Chưa có ứng viên nào." />
-        ) : (
-          <div className="inline-list">
-            {funnelEntries.map(([stage, count]) => (
-              <span key={stage} className="badge badge-blue">
-                {stage}: {count}
-              </span>
-            ))}
+      <div className="bento-3 section">
+        <div className="card bento-3__feature">
+          <h2 className="card-title">Phễu chuyển đổi ứng viên</h2>
+          {funnelEntries.length === 0 ? (
+            <Empty icon="users" label="Chưa có ứng viên nào." />
+          ) : (
+            <div className="funnel-bars">
+              {funnelEntries.map(([stage, count]) => (
+                <div className="funnel-bars__col" key={stage}>
+                  <div className="funnel-bars__track">
+                    <span className="funnel-bars__value">{count.toLocaleString('vi-VN')}</span>
+                    <div
+                      className="funnel-bars__fill"
+                      style={{ height: `${funnelMax > 0 ? Math.max((count / funnelMax) * 100, 4) : 4}%` }}
+                    />
+                  </div>
+                  <div className="funnel-bars__label">{stage}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bento-3__side">
+          <div className="card" style={{ marginBottom: 0 }}>
+            <h2 className="card-title">Hoạt động gần đây</h2>
+            <RecentActivityFeed items={data.recentActivity} />
           </div>
-        )}
-      </div>
-
-      <div className="card">
-        <h2 className="card-title">Hoạt động gần đây</h2>
-        <RecentActivityList items={data.recentActivity} />
+        </div>
       </div>
 
       <div className="card">
@@ -388,35 +459,27 @@ function AdminDashboard({
   );
 }
 
-/** The Recent_Activity_Feed list (ADMIN only) — newest first, full context (Req 6.6). */
-function RecentActivityList({ items }: { items: ActivityFeedItem[] }) {
-  if (items.length === 0) {
+/** The Recent_Activity_Feed (ADMIN only) — newest first, bullet + mono meta. */
+function RecentActivityFeed({ items }: { items: ActivityFeedItem[] }) {
+  const list = items ?? [];
+  if (list.length === 0) {
     return <Empty icon="file-text" label="Chưa có hoạt động nào." />;
   }
   return (
-    <div className="table-wrap">
-      <table className="data">
-        <thead>
-          <tr>
-            <th>Người thực hiện</th>
-            <th>Hành động</th>
-            <th>Đối tượng</th>
-            <th>Thời gian</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item, index) => (
-            <tr key={`${item.targetType}-${item.targetId}-${item.createdAt}-${index}`}>
-              <td>{item.actorUserId}</td>
-              <td>{activityActionLabel(item.action)}</td>
-              <td>
-                {activityTargetLabel(item.targetType)} #{item.targetId}
-              </td>
-              <td>{formatDate(item.createdAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="steps-list">
+      {list.slice(0, 6).map((item, index) => (
+        <div className="feed-item" key={`${item.targetType}-${item.targetId}-${item.createdAt}-${index}`}>
+          <span className="feed-item__dot" aria-hidden="true" />
+          <div style={{ minWidth: 0 }}>
+            <div className="feed-item__title">
+              {activityActionLabel(item.action)} · {activityTargetLabel(item.targetType)} #{item.targetId}
+            </div>
+            <div className="feed-item__meta">
+              {item.actorUserId} • {formatDate(item.createdAt)}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -424,12 +487,12 @@ function RecentActivityList({ items }: { items: ActivityFeedItem[] }) {
 /** SALES (personal scope): personal KPIs only — no company stats, no activity feed. */
 function SalesDashboard({ data }: { data: PersonalDashboardOverview }) {
   const { kpis } = data;
-  const leadStatusEntries = Object.entries(kpis.leadsByStatus);
+  const leadStatusEntries = Object.entries(kpis.leadsByStatus ?? {});
 
   return (
     <>
-      <div className="grid grid-4 section">
-        <StatCard label="Lead của tôi" count={kpis.totalLeads} />
+      <div className="kpi-grid">
+        <KpiCard label="Lead của tôi" value={kpis.totalLeads.toLocaleString('vi-VN')} icon="user-plus" />
       </div>
 
       <div className="card">

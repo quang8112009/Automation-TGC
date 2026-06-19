@@ -97,7 +97,7 @@ export function Loading({
 }
 
 export function Empty({
-  label = 'Nothing to show yet.',
+  label = 'Chưa có dữ liệu để hiển thị.',
   icon = 'file-text',
   action,
 }: {
@@ -143,7 +143,7 @@ export function ErrorMessage({ error }: { error: unknown }) {
       <span className="state__line">
         <Icon name="alert-triangle" size={16} />
         <span>
-          <strong>{view.code ?? 'Error'}</strong> — {view.message}
+          <strong>{view.code ?? 'Lỗi'}</strong> — {view.message}
         </span>
       </span>
     </div>
@@ -316,7 +316,7 @@ export function Pagination({
   return (
     <div className="pagination">
       <span className="muted">
-        Page {page} of {totalPages} · {total} total
+        Trang {page} / {totalPages} · {total} mục
       </span>
       <button
         className="btn btn-sm"
@@ -324,14 +324,14 @@ export function Pagination({
         onClick={() => onPage(page - 1)}
       >
         <Icon name="chevron-left" size={16} />
-        Prev
+        Trước
       </button>
       <button
         className="btn btn-sm"
         disabled={page >= totalPages}
         onClick={() => onPage(page + 1)}
       >
-        Next
+        Sau
         <Icon name="chevron-right" size={16} />
       </button>
     </div>

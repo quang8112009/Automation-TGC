@@ -355,7 +355,7 @@ function RunTimeline({ runId }: { runId: string }) {
 /** Render the canonical autopilot steps as a timeline, ordered consistently. */
 function StepTimeline({ run }: { run: WorkflowRun }) {
   // Order steps by the canonical order, then by orderIndex for any extras.
-  const byName = new Map(run.steps.map((s) => [s.name, s]));
+  const byName = new Map((run.steps ?? []).map((s) => [s.name, s]));
   const ordered: WorkflowStep[] = [];
   for (const name of AUTOPILOT_STEP_ORDER) {
     const step = byName.get(name);
@@ -423,7 +423,7 @@ function StepOutput({ output }: { output: unknown }) {
 /** Pull the summary object out of the run context or the summary step output. */
 function extractSummary(run: WorkflowRun): AutopilotSummary | null {
   // Prefer the summary step's output.summary.
-  const summaryStep = run.steps.find((s) => s.name === 'summary');
+  const summaryStep = (run.steps ?? []).find((s) => s.name === 'summary');
   const fromStep = readSummary(summaryStep?.output);
   if (fromStep) return fromStep;
   // Fallback: the run context may carry a merged summary.

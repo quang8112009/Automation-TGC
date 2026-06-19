@@ -110,7 +110,7 @@ export function Strategy() {
       <div className="page-header">
         <div>
           <div className="eyebrow">Marketing AI</div>
-          <h1 className="page-title">Strategy &amp; Personas</h1>
+          <h1 className="page-title">Chiến lược &amp; Persona</h1>
         </div>
         <button
           className="btn btn-primary btn-sm"
@@ -121,25 +121,25 @@ export function Strategy() {
           }}
         >
           <Icon name="plus" size={16} />
-          New Persona
+          Persona mới
         </button>
       </div>
 
       <div className="grid grid-2">
         {/* AI Recommendation */}
         <div className="card">
-          <h2 className="card-title">AI Persona Recommendation</h2>
+          <h2 className="card-title">Gợi ý Persona bằng AI</h2>
           <p className="muted">
-            Ask the AI to propose a persona for a domain. Returns a draft you can edit
-            and save.
+            Yêu cầu AI đề xuất một persona cho lĩnh vực của bạn. Kết quả là một bản nháp có thể
+            chỉnh sửa và lưu lại.
           </p>
           <div className="toolbar">
             <div className="field" style={{ flex: 1 }}>
-              <label>Domain name</label>
+              <label>Lĩnh vực / ngành</label>
               <input
                 value={recoDomain}
                 onChange={(e) => setRecoDomain(e.target.value)}
-                placeholder="e.g. organic-skincare"
+                placeholder="VD: mỹ phẩm hữu cơ"
               />
             </div>
             <button
@@ -147,13 +147,13 @@ export function Strategy() {
               disabled={!recoDomain || recommendMutation.isPending}
               onClick={() => recommendMutation.mutate(recoDomain)}
             >
-              {recommendMutation.isPending ? 'Asking…' : 'Get recommendation'}
+              {recommendMutation.isPending ? 'Đang hỏi…' : 'Lấy gợi ý'}
             </button>
           </div>
           {recommendMutation.error != null && <ErrorMessage error={recommendMutation.error} />}
           {reco && (
             <div className="success-box">
-              Recommendation ready.{' '}
+              Đã có gợi ý.{' '}
               <button
                 className="btn btn-sm"
                 onClick={() => {
@@ -161,7 +161,7 @@ export function Strategy() {
                   setShowForm(true);
                 }}
               >
-                Review &amp; save
+                Xem &amp; lưu
               </button>
             </div>
           )}
@@ -169,7 +169,7 @@ export function Strategy() {
 
         {/* AI Context read model */}
         <div className="card">
-          <h2 className="card-title">AI Prompt Context</h2>
+          <h2 className="card-title">Ngữ cảnh nhắc AI</h2>
           {aiContextQuery.isLoading ? (
             <Loading />
           ) : aiContextQuery.error ? (
@@ -183,10 +183,10 @@ export function Strategy() {
       {/* Saved personas (from the backend list endpoint, merged with any created
           this session so a just-created persona shows immediately). */}
       <div className="card">
-        <h2 className="card-title">Personas</h2>
+        <h2 className="card-title">Persona</h2>
         <p className="muted">
-          All saved personas across domains. Newly created or edited personas appear here
-          right away. Sao chép <strong>Persona ID</strong> để dán vào Xưởng nội dung / Kế hoạch nội
+          Tất cả persona đã lưu trên mọi lĩnh vực. Persona vừa tạo hoặc sửa sẽ xuất hiện ngay tại
+          đây. Sao chép <strong>Persona ID</strong> để dán vào Xưởng nội dung / Kế hoạch nội
           dung khi tạo nội dung.
         </p>
         {personasQuery.isLoading ? (
@@ -208,7 +208,7 @@ export function Strategy() {
             if (personas.length === 0) {
               return (
                 <Empty
-                  label="No personas yet. Create one to get started."
+                  label="Chưa có persona nào. Tạo một persona để bắt đầu."
                   icon="users"
                   action={
                     <button
@@ -220,7 +220,7 @@ export function Strategy() {
                       }}
                     >
                       <Icon name="plus" size={16} />
-                      New Persona
+                      Persona mới
                     </button>
                   }
                 />
@@ -232,11 +232,11 @@ export function Strategy() {
                   <thead>
                     <tr>
                       <th>Persona ID</th>
-                      <th>Name</th>
-                      <th>Age</th>
-                      <th>Tone</th>
-                      <th>Needs</th>
-                      <th>Actions</th>
+                      <th>Tên</th>
+                      <th>Tuổi</th>
+                      <th>Giọng điệu</th>
+                      <th>Nhu cầu</th>
+                      <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -258,7 +258,7 @@ export function Strategy() {
                               setShowForm(true);
                             }}
                           >
-                            Edit
+                            Sửa
                           </button>
                         </td>
                       </tr>
@@ -383,50 +383,50 @@ function PersonaFormModal({
   }
 
   return (
-    <Modal title={existing ? 'Edit Persona' : 'New Persona'} onClose={onClose}>
+    <Modal title={existing ? 'Sửa Persona' : 'Persona mới'} onClose={onClose}>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
       {!existing && (
         <div className="field">
-          <label>Domain name *</label>
+          <label>Lĩnh vực / ngành (bắt buộc)</label>
           <input value={form.domainName ?? ''} onChange={(e) => set('domainName', e.target.value)} />
         </div>
       )}
       <div className="field">
-        <label>Persona name</label>
+        <label>Tên persona</label>
         <input value={form.personaName ?? ''} onChange={(e) => set('personaName', e.target.value)} />
       </div>
       <div className="grid grid-2">
         <div className="field">
-          <label>Age *</label>
+          <label>Độ tuổi (bắt buộc)</label>
           <input value={form.age ?? ''} onChange={(e) => set('age', e.target.value)} />
         </div>
         <div className="field">
-          <label>Tone of voice *</label>
+          <label>Giọng điệu (bắt buộc)</label>
           <input value={form.toneOfVoice ?? ''} onChange={(e) => set('toneOfVoice', e.target.value)} />
         </div>
       </div>
       <div className="field">
-        <label>Interests</label>
+        <label>Sở thích</label>
         <input value={form.interests ?? ''} onChange={(e) => set('interests', e.target.value)} />
       </div>
       <div className="field">
-        <label>Target needs *</label>
+        <label>Nhu cầu mục tiêu (bắt buộc)</label>
         <textarea value={form.targetNeeds ?? ''} onChange={(e) => set('targetNeeds', e.target.value)} />
       </div>
       <div className="field">
-        <label>Pain points *</label>
+        <label>Nỗi đau / vướng mắc (bắt buộc)</label>
         <textarea value={form.painPoints ?? ''} onChange={(e) => set('painPoints', e.target.value)} />
       </div>
       <div className="modal-actions">
         <button className="btn" onClick={onClose}>
-          Cancel
+          Huỷ
         </button>
         <button
           className="btn btn-primary"
           disabled={mutation.isPending}
           onClick={() => mutation.mutate()}
         >
-          {mutation.isPending ? 'Saving…' : existing ? 'Save' : 'Create'}
+          {mutation.isPending ? 'Đang lưu…' : existing ? 'Lưu' : 'Tạo'}
         </button>
       </div>
     </Modal>
@@ -450,7 +450,7 @@ function CalendarSection() {
     mutationFn: (args: { id: string; at: string }) =>
       rescheduleCalendarItem(args.id, new Date(args.at).toISOString()),
     onSuccess: () => {
-      setRescheduleMsg('Rescheduled successfully.');
+      setRescheduleMsg('Đã đổi lịch thành công.');
       setRescheduleId(null);
       setRescheduleAt('');
       void queryClient.invalidateQueries({ queryKey: ['calendar'] });
@@ -459,18 +459,18 @@ function CalendarSection() {
 
   return (
     <div className="card">
-      <h2 className="card-title">Content Calendar</h2>
+      <h2 className="card-title">Lịch nội dung</h2>
       <div className="toolbar">
         <div className="field">
-          <label>View</label>
+          <label>Chế độ xem</label>
           <select value={view} onChange={(e) => setView(e.target.value as CalendarView)}>
-            <option value="month">Month</option>
-            <option value="week">Week</option>
-            <option value="day">Day</option>
+            <option value="month">Tháng</option>
+            <option value="week">Tuần</option>
+            <option value="day">Ngày</option>
           </select>
         </div>
         <div className="field">
-          <label>Anchor date</label>
+          <label>Ngày mốc</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
       </div>
@@ -483,19 +483,19 @@ function CalendarSection() {
         <ErrorMessage error={calendarQuery.error} />
       ) : calendarQuery.data ? (
         <>
-          {calendarQuery.data.unavailable.length > 0 && (
+          {(calendarQuery.data.unavailable ?? []).length > 0 && (
             <div className="notice">
-              Some sources were unavailable: {calendarQuery.data.unavailable.join(', ')}
+              Một số nguồn không khả dụng: {(calendarQuery.data.unavailable ?? []).join(', ')}
             </div>
           )}
           <div className="grid grid-2">
             <div>
-              <h3>Drafts ({calendarQuery.data.drafts.length})</h3>
-              {calendarQuery.data.drafts.length === 0 ? (
-                <div className="muted">No drafts in this window.</div>
+              <h3>Bản nháp ({(calendarQuery.data.drafts ?? []).length})</h3>
+              {(calendarQuery.data.drafts ?? []).length === 0 ? (
+                <div className="muted">Không có bản nháp trong khoảng này.</div>
               ) : (
                 <ul>
-                  {calendarQuery.data.drafts.map((d) => (
+                  {(calendarQuery.data.drafts ?? []).map((d) => (
                     <li key={d.id}>
                       <span
                         className="conn-dot"
@@ -508,22 +508,22 @@ function CalendarSection() {
               )}
             </div>
             <div>
-              <h3>Scheduled Posts ({calendarQuery.data.scheduledPosts.length})</h3>
-              {calendarQuery.data.scheduledPosts.length === 0 ? (
-                <div className="muted">No scheduled posts in this window.</div>
+              <h3>Bài đã lên lịch ({(calendarQuery.data.scheduledPosts ?? []).length})</h3>
+              {(calendarQuery.data.scheduledPosts ?? []).length === 0 ? (
+                <div className="muted">Không có bài đã lên lịch trong khoảng này.</div>
               ) : (
                 <div className="table-wrap">
                   <table className="data">
                     <thead>
                       <tr>
-                        <th>Platform</th>
-                        <th>When</th>
-                        <th>Status</th>
+                        <th>Nền tảng</th>
+                        <th>Thời gian</th>
+                        <th>Trạng thái</th>
                         <th></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {calendarQuery.data.scheduledPosts.map((p) => (
+                      {(calendarQuery.data.scheduledPosts ?? []).map((p) => (
                         <tr key={p.id}>
                           <td>{p.platformLabel}</td>
                           <td>{formatDate(p.scheduledAt)}</td>
@@ -539,7 +539,7 @@ function CalendarSection() {
                                   setRescheduleMsg(null);
                                 }}
                               >
-                                Reschedule
+                                Đổi lịch
                               </button>
                             )}
                           </td>
@@ -555,10 +555,10 @@ function CalendarSection() {
       ) : null}
 
       {rescheduleId && (
-        <Modal title="Reschedule Post" onClose={() => setRescheduleId(null)}>
+        <Modal title="Đổi lịch bài đăng" onClose={() => setRescheduleId(null)}>
           {rescheduleMutation.error != null && <ErrorMessage error={rescheduleMutation.error} />}
           <div className="field">
-            <label>New time (must be in the future)</label>
+            <label>Thời gian mới (phải ở tương lai)</label>
             <input
               type="datetime-local"
               value={rescheduleAt}
@@ -567,14 +567,14 @@ function CalendarSection() {
           </div>
           <div className="modal-actions">
             <button className="btn" onClick={() => setRescheduleId(null)}>
-              Cancel
+              Huỷ
             </button>
             <button
               className="btn btn-primary"
               disabled={!rescheduleAt || rescheduleMutation.isPending}
               onClick={() => rescheduleMutation.mutate({ id: rescheduleId, at: rescheduleAt })}
             >
-              {rescheduleMutation.isPending ? 'Saving…' : 'Reschedule'}
+              {rescheduleMutation.isPending ? 'Đang lưu…' : 'Đổi lịch'}
             </button>
           </div>
         </Modal>

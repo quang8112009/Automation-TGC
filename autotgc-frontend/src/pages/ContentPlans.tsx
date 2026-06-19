@@ -82,15 +82,18 @@ export function ContentPlans() {
 
   return (
     <div className="reveal">
-      <div className="page-header">
-        <div>
-          <div className="eyebrow">Nội dung</div>
-          <h1 className="page-title">Kế hoạch nội dung</h1>
+      <div className="page-head">
+        <div className="page-head__titles">
+          <h1 className="page-head__title">
+            Kế hoạch <em>nội dung</em>
+            <span className="badge badge-yellow" style={{ alignSelf: 'center' }}>AI-Powered</span>
+          </h1>
+          <p className="page-head__subtitle">Quản lý các chiến dịch nội dung tự động tạo bởi AutoPilot.</p>
         </div>
-        <div className="row-actions">
+        <div className="page-head__actions">
           <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
             <Icon name="plus" size={16} />
-            Kế hoạch mới
+            Tạo kế hoạch
           </button>
         </div>
       </div>
@@ -120,47 +123,61 @@ export function ContentPlans() {
         </div>
       </div>
 
-      <div className="card">
-        {plansQuery.isLoading ? (
+      {plansQuery.isLoading ? (
+        <div className="card">
           <Loading variant="table" rows={6} label="Đang tải kế hoạch…" />
-        ) : plansQuery.error ? (
-          <ErrorMessage error={plansQuery.error} />
-        ) : plans.length > 0 ? (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Tiêu đề</th>
-                  <th>Thị trường</th>
-                  <th>Mục tiêu</th>
-                  <th>Giai đoạn</th>
-                  <th>Trạng thái</th>
-                  <th>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plans.map((p) => (
-                  <tr key={p.id}>
-                    <td style={{ whiteSpace: 'normal', maxWidth: '40ch' }}>{p.title}</td>
-                    <td>{marketingMarketLabel(p.market)}</td>
-                    <td>{objectiveLabel(p.objective)}</td>
-                    <td>
-                      {formatDate(p.periodFrom)} → {formatDate(p.periodTo)}
-                    </td>
-                    <td>
-                      <PlanStatusBadge status={p.status} />
-                    </td>
-                    <td>
-                      <button className="btn btn-sm" onClick={() => setOpenPlanId(p.id)}>
-                        Mở
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
+        </div>
+      ) : plansQuery.error ? (
+        <ErrorMessage error={plansQuery.error} />
+      ) : plans.length > 0 ? (
+        <div className="card-grid">
+          {plans.map((p) => {
+            const period = `${formatDate(p.periodFrom)} → ${formatDate(p.periodTo)}`;
+            const itemCount = 'itemCount' in p && typeof (p as { itemCount?: number }).itemCount === 'number'
+              ? (p as { itemCount: number }).itemCount
+              : undefined;
+            return (
+              <div className="entity-card" key={p.id}>
+                <div className="entity-card__body">
+                  <div>
+                    <PlanStatusBadge status={p.status} />
+                  </div>
+                  <h3 className="entity-card__title">{p.title}</h3>
+                  <p className="entity-card__desc">
+                    {marketingMarketLabel(p.market)} · {objectiveLabel(p.objective)}
+                  </p>
+                  <div className="entity-card__meta">
+                    <span className="mono">
+                      <Icon name="calendar-days" size={14} /> {period}
+                    </span>
+                    {itemCount != null ? (
+                      <span>
+                        <strong style={{ color: 'var(--text-strong)' }}>{itemCount}</strong> bài
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="entity-card__footer">
+                  <span className="muted" style={{ fontSize: 'var(--fs-xs)' }}>
+                    {marketingMarketLabel(p.market)}
+                  </span>
+                  <button className="btn btn-sm btn--secondary" onClick={() => setOpenPlanId(p.id)}>
+                    <Icon name="pen-tool" size={14} /> Mở kế hoạch
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          <button className="card--dashed" onClick={() => setShowCreate(true)}>
+            <span className="kpi-card__icon" aria-hidden="true">
+              <Icon name="plus" size={24} />
+            </span>
+            <span style={{ fontWeight: 'var(--fw-medium)' }}>Thêm kế hoạch mới</span>
+          </button>
+        </div>
+      ) : (
+        <div className="card">
           <Empty
             icon="calendar-days"
             label="Chưa có kế hoạch nội dung nào. Hãy tạo kế hoạch mới."
@@ -171,8 +188,8 @@ export function ContentPlans() {
               </button>
             }
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {showCreate && (
         <CreatePlanModal

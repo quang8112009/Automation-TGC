@@ -41,7 +41,7 @@ export function Insights() {
   const analyzeMutation = useMutation({
     mutationFn: runAnalyze,
     onSuccess: () => {
-      setAnalyzeMsg('Analysis run complete.');
+      setAnalyzeMsg('Đã chạy phân tích xong.');
       void queryClient.invalidateQueries({ queryKey: ['insights'] });
     },
   });
@@ -55,7 +55,7 @@ export function Insights() {
       <div className="page-header">
         <div>
           <div className="eyebrow">Marketing AI</div>
-          <h1 className="page-title">Insights</h1>
+          <h1 className="page-title">Insights (Bài học tối ưu)</h1>
         </div>
         <button
           className="btn btn-sm"
@@ -65,7 +65,7 @@ export function Insights() {
             analyzeMutation.mutate();
           }}
         >
-          {analyzeMutation.isPending ? 'Analyzing…' : 'Run Analysis'}
+          {analyzeMutation.isPending ? 'Đang phân tích…' : 'Chạy phân tích'}
         </button>
       </div>
 
@@ -73,7 +73,7 @@ export function Insights() {
       {analyzeMutation.error != null && <ErrorMessage error={analyzeMutation.error} />}
 
       <div className="card">
-        <h2 className="card-title">Pending Review</h2>
+        <h2 className="card-title">Chờ duyệt</h2>
         {insightsQuery.isLoading ? (
           <Loading variant="table" rows={6} label="Đang tải insight…" />
         ) : insightsQuery.error ? (
@@ -84,12 +84,12 @@ export function Insights() {
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Confidence</th>
-                    <th>Sample</th>
-                    <th>Generated</th>
-                    <th>Actions</th>
+                    <th>Loại</th>
+                    <th>Trạng thái</th>
+                    <th>Độ tin cậy</th>
+                    <th>Cỡ mẫu</th>
+                    <th>Tạo lúc</th>
+                    <th>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -104,7 +104,7 @@ export function Insights() {
                       <td>{formatDate(i.generatedAt)}</td>
                       <td>
                         <button className="btn btn-sm" onClick={() => setOpenId(i.insightId)}>
-                          Review
+                          Xem xét
                         </button>
                       </td>
                     </tr>
@@ -122,7 +122,7 @@ export function Insights() {
         ) : (
           <Empty
             icon="lightbulb"
-            label="No insights pending review."
+            label="Không có insight nào đang chờ duyệt."
             action={
               <button
                 className="btn btn-primary btn-sm"
@@ -132,7 +132,7 @@ export function Insights() {
                   analyzeMutation.mutate();
                 }}
               >
-                {analyzeMutation.isPending ? 'Analyzing…' : 'Run Analysis'}
+                {analyzeMutation.isPending ? 'Đang phân tích…' : 'Chạy phân tích'}
               </button>
             }
           />
@@ -173,7 +173,7 @@ function InsightDetailModal({
   const applyMutation = useMutation({
     mutationFn: () => applyInsight(id),
     onSuccess: () => {
-      setMessage('Insight applied to strategy.');
+      setMessage('Đã áp dụng insight vào chiến lược.');
       onChanged();
     },
   });
@@ -181,7 +181,7 @@ function InsightDetailModal({
   const rejectMutation = useMutation({
     mutationFn: () => rejectInsight(id, reason),
     onSuccess: () => {
-      setMessage('Insight rejected.');
+      setMessage('Đã từ chối insight.');
       onChanged();
     },
   });
@@ -192,12 +192,12 @@ function InsightDetailModal({
       try {
         parsed = JSON.parse(modifyText) as Record<string, unknown>;
       } catch {
-        throw new Error('Modified change must be valid JSON.');
+        throw new Error('Nội dung chỉnh sửa phải là JSON hợp lệ.');
       }
       return modifyInsight(id, parsed);
     },
     onSuccess: () => {
-      setMessage('Modified change saved.');
+      setMessage('Đã lưu chỉnh sửa.');
       onChanged();
     },
   });
@@ -205,7 +205,7 @@ function InsightDetailModal({
   const anyError = applyMutation.error ?? rejectMutation.error ?? modifyMutation.error;
 
   return (
-    <Modal title="Insight Review" onClose={onClose}>
+    <Modal title="Xem xét insight" onClose={onClose}>
       {isLoading ? (
         <Loading />
       ) : error ? (
@@ -216,41 +216,41 @@ function InsightDetailModal({
           {anyError != null && <ErrorMessage error={anyError} />}
 
           <dl className="kv">
-            <dt>Type</dt>
+            <dt>Loại</dt>
             <dd>{data.insight.insightType}</dd>
-            <dt>Status</dt>
+            <dt>Trạng thái</dt>
             <dd>
               <StatusBadge status={data.insight.insightStatus} />
             </dd>
-            <dt>Confidence</dt>
+            <dt>Độ tin cậy</dt>
             <dd>{(data.insight.confidenceScore * 100).toFixed(0)}%</dd>
-            <dt>Sample size</dt>
+            <dt>Cỡ mẫu</dt>
             <dd>{data.insight.sampleSize}</dd>
-            <dt>Analysis period</dt>
+            <dt>Kỳ phân tích</dt>
             <dd>{data.insight.analysisPeriod}</dd>
           </dl>
 
-          <h3>Subject</h3>
+          <h3>Đối tượng</h3>
           <pre className="code">{JSON.stringify(data.insight.subject, null, 2)}</pre>
-          <h3>Recommended Change</h3>
+          <h3>Thay đổi đề xuất</h3>
           <pre className="code">{JSON.stringify(data.insight.recommendedChange, null, 2)}</pre>
 
-          <h3>Supporting Records ({data.supportingRecords.length})</h3>
-          {data.supportingRecords.length === 0 ? (
-            <Empty icon="file-text" label="No supporting records." />
+          <h3>Dữ liệu hỗ trợ ({(data.supportingRecords ?? []).length})</h3>
+          {(data.supportingRecords ?? []).length === 0 ? (
+            <Empty icon="file-text" label="Không có dữ liệu hỗ trợ." />
           ) : (
             <div className="table-wrap">
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Post</th>
-                    <th>Topic</th>
-                    <th>Label</th>
-                    <th>Conv. rate</th>
+                    <th>Bài</th>
+                    <th>Chủ đề</th>
+                    <th>Nhãn</th>
+                    <th>Tỉ lệ chuyển đổi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.supportingRecords.map((r) => (
+                  {(data.supportingRecords ?? []).map((r) => (
                     <tr key={r.postId}>
                       <td>{r.postId}</td>
                       <td>{r.contentTopic}</td>
@@ -264,7 +264,7 @@ function InsightDetailModal({
           )}
 
           <div className="field" style={{ marginTop: 'var(--space-md)' }}>
-            <label>Modify recommended change (JSON, optional)</label>
+            <label>Chỉnh sửa thay đổi đề xuất (JSON, tuỳ chọn)</label>
             <textarea
               value={modifyText}
               onChange={(e) => setModifyText(e.target.value)}
@@ -276,12 +276,12 @@ function InsightDetailModal({
               disabled={!modifyText || modifyMutation.isPending}
               onClick={() => modifyMutation.mutate()}
             >
-              Save modification
+              Lưu chỉnh sửa
             </button>
           </div>
 
           <div className="field">
-            <label>Rejection reason</label>
+            <label>Lý do từ chối</label>
             <input value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
 
@@ -291,14 +291,14 @@ function InsightDetailModal({
               disabled={!reason || rejectMutation.isPending}
               onClick={() => rejectMutation.mutate()}
             >
-              Reject
+              Từ chối
             </button>
             <button
               className="btn btn-primary"
               disabled={applyMutation.isPending}
               onClick={() => applyMutation.mutate()}
             >
-              {applyMutation.isPending ? 'Applying…' : 'Apply'}
+              {applyMutation.isPending ? 'Đang áp dụng…' : 'Áp dụng'}
             </button>
           </div>
         </>

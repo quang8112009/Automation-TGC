@@ -38,13 +38,13 @@ export function PlatformTokens() {
           className="btn btn-sm"
           onClick={() => void queryClient.invalidateQueries({ queryKey: ['platformTokens'] })}
         >
-          Reload
+          Tải lại
         </button>
       </div>
 
       <p className="muted" style={{ marginBottom: 'var(--space-md)' }}>
-        Token values are stored in the server-side secret store and never exposed by the
-        API. This view shows metadata and validity only.
+        Giá trị token được lưu trong kho bí mật phía máy chủ và không bao giờ lộ qua API.
+        Màn hình này chỉ hiển thị thông tin mô tả và tình trạng hiệu lực.
       </p>
 
       {refreshMutation.error != null && <ErrorMessage error={refreshMutation.error} />}
@@ -59,11 +59,11 @@ export function PlatformTokens() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Platform</th>
-                  <th>Type</th>
-                  <th>Expires</th>
-                  <th>Validity</th>
-                  <th>Actions</th>
+                  <th>Nền tảng</th>
+                  <th>Loại</th>
+                  <th>Hết hạn</th>
+                  <th>Hiệu lực</th>
+                  <th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -81,7 +81,7 @@ export function PlatformTokens() {
                         disabled={refreshMutation.isPending}
                         onClick={() => refreshMutation.mutate(t.platform)}
                       >
-                        Refresh
+                        {refreshMutation.isPending ? 'Đang làm mới…' : 'Làm mới'}
                       </button>
                     </td>
                   </tr>
@@ -90,7 +90,7 @@ export function PlatformTokens() {
             </table>
           </div>
         ) : (
-          <Empty icon="key" label="No platform tokens registered." />
+          <Empty icon="key" label="Chưa có platform token nào được đăng ký." />
         )}
       </div>
     </div>

@@ -81,7 +81,7 @@ const COLLAPSE_KEY = 'autotgc.sidebar.collapsed';
 
 function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
   const label =
-    status === 'open' ? 'Live' : status === 'connecting' ? 'Connecting…' : 'Offline';
+    status === 'open' ? 'Trực tuyến' : status === 'connecting' ? 'Đang kết nối…' : 'Ngoại tuyến';
   return (
     <span className={`conn conn-${status}`} title={`Realtime: ${label}`}>
       <span className="conn-dot" />
@@ -215,7 +215,7 @@ export function Layout() {
             title="Đăng xuất"
           >
             <Icon name="log-out" size={16} />
-            <span>Logout</span>
+            <span>Đăng xuất</span>
           </button>
         </header>
         <main className="content">

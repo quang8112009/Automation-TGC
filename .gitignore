@@ -27,3 +27,9 @@ skills-lock.json
 fix-mojibake.ps1
 fix_mojibake.py
 scan-mojibake.ps1
+
+# Downloaded reference bundles (not product source)
+_ref-ideal/
+
+# Local server-check script (contains host-specific SSH credentials)
+check-server.ps1

@@ -379,10 +379,11 @@ function MatchPanel({
 }
 
 function HistoryTimeline({ history }: { history: CandidateStageHistoryEntry[] }) {
+  const entries = history ?? [];
   return (
     <div className="card">
       <h2 className="card-title">Lịch sử giai đoạn</h2>
-      {history.length === 0 ? (
+      {entries.length === 0 ? (
         <div className="muted">Chưa có thay đổi giai đoạn nào.</div>
       ) : (
         <div className="table-wrap">
@@ -395,7 +396,7 @@ function HistoryTimeline({ history }: { history: CandidateStageHistoryEntry[] })
               </tr>
             </thead>
             <tbody>
-              {history.map((h) => (
+              {entries.map((h) => (
                 <tr key={h.id}>
                   <td>{formatDate(h.changedAt)}</td>
                   <td>

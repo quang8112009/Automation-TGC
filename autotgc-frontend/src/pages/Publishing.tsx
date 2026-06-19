@@ -19,7 +19,7 @@ export function Publishing() {
       <div className="page-header">
         <div>
           <div className="eyebrow">Nội dung</div>
-          <h1 className="page-title">Publishing</h1>
+          <h1 className="page-title">Đăng bài</h1>
         </div>
       </div>
       <div className="grid grid-2">
@@ -53,14 +53,14 @@ function ScheduleCard() {
 
   return (
     <div className="card">
-      <h2 className="card-title">Schedule a Draft</h2>
+      <h2 className="card-title">Lên lịch đăng bản nháp</h2>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
-      {result && <SuccessMessage>Scheduled.</SuccessMessage>}
+      {result && <SuccessMessage>Đã lên lịch.</SuccessMessage>}
       <div className="field">
-        <label>Draft ID *</label>
+        <label>Mã bản nháp (bắt buộc)</label>
         <input value={draftId} onChange={(e) => setDraftId(e.target.value)} />
       </div>
-      <label>Platforms &amp; times</label>
+      <label>Nền tảng &amp; thời gian</label>
       {PLATFORMS.map((p) => (
         <div
           key={p}
@@ -92,7 +92,7 @@ function ScheduleCard() {
             mutation.mutate();
           }}
         >
-          {mutation.isPending ? 'Scheduling…' : 'Schedule'}
+          {mutation.isPending ? 'Đang lên lịch…' : 'Lên lịch'}
         </button>
       </div>
       {result && <pre className="code">{result}</pre>}
@@ -112,15 +112,15 @@ function RetryCard() {
 
   return (
     <div className="card">
-      <h2 className="card-title">Retry Failed Post</h2>
+      <h2 className="card-title">Đăng lại bài lỗi</h2>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
-      {done && <SuccessMessage>Retry scheduled.</SuccessMessage>}
+      {done && <SuccessMessage>Đã lên lịch đăng lại.</SuccessMessage>}
       <div className="field">
-        <label>Scheduled Post ID *</label>
+        <label>Mã bài đã lên lịch (bắt buộc)</label>
         <input value={id} onChange={(e) => setId(e.target.value)} />
       </div>
       <div className="field">
-        <label>New time *</label>
+        <label>Thời gian mới (bắt buộc)</label>
         <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
       </div>
       <div className="modal-actions">
@@ -132,7 +132,7 @@ function RetryCard() {
             mutation.mutate();
           }}
         >
-          {mutation.isPending ? 'Retrying…' : 'Retry'}
+          {mutation.isPending ? 'Đang xử lý…' : 'Đăng lại'}
         </button>
       </div>
     </div>
@@ -150,11 +150,11 @@ function PublishNowCard() {
 
   return (
     <div className="card">
-      <h2 className="card-title">Trigger Publish</h2>
+      <h2 className="card-title">Đăng ngay</h2>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
-      {result && <SuccessMessage>Published.</SuccessMessage>}
+      {result && <SuccessMessage>Đã đăng.</SuccessMessage>}
       <div className="field">
-        <label>Scheduled Post ID *</label>
+        <label>Mã bài đã lên lịch (bắt buộc)</label>
         <input value={id} onChange={(e) => setId(e.target.value)} />
       </div>
       <div className="modal-actions">
@@ -166,7 +166,7 @@ function PublishNowCard() {
             mutation.mutate();
           }}
         >
-          {mutation.isPending ? 'Publishing…' : 'Publish now'}
+          {mutation.isPending ? 'Đang đăng…' : 'Đăng ngay'}
         </button>
       </div>
       {result && <pre className="code">{result}</pre>}

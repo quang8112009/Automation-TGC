@@ -52,11 +52,11 @@ export function Drafts() {
       <div className="page-header">
         <div>
           <div className="eyebrow">Nội dung</div>
-          <h1 className="page-title">Drafts</h1>
+          <h1 className="page-title">Bản nháp</h1>
         </div>
         <button className="btn btn-primary btn-sm" onClick={() => setShowGenerate(true)}>
           <Icon name="plus" size={16} />
-          Generate Draft
+          Tạo bản nháp
         </button>
       </div>
 
@@ -71,21 +71,21 @@ export function Drafts() {
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Title</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th>Tiêu đề</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {draftsQuery.data.items.map((d) => (
                     <tr key={d.id}>
-                      <td>{d.title || '(untitled)'}</td>
+                      <td>{d.title || '(chưa có tiêu đề)'}</td>
                       <td>
                         <StatusBadge status={d.status} />
                       </td>
                       <td>
                         <button className="btn btn-sm" onClick={() => setOpenDraftId(d.id)}>
-                          Open
+                          Mở
                         </button>
                       </td>
                     </tr>
@@ -102,12 +102,12 @@ export function Drafts() {
           </>
         ) : (
           <Empty
-            label="No drafts yet. Generate one to get started."
+            label="Chưa có bản nháp nào. Tạo một bản để bắt đầu."
             icon="file-text"
             action={
               <button className="btn btn-primary btn-sm" onClick={() => setShowGenerate(true)}>
                 <Icon name="plus" size={16} />
-                Generate Draft
+                Tạo bản nháp
               </button>
             }
           />
@@ -154,31 +154,31 @@ function GenerateModal({ onClose, onDone }: { onClose: () => void; onDone: () =>
   });
 
   return (
-    <Modal title="Generate Draft" onClose={onClose}>
+    <Modal title="Tạo bản nháp" onClose={onClose}>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
       <div className="field">
-        <label>Domain name *</label>
+        <label>Lĩnh vực / ngành (bắt buộc)</label>
         <input value={domainName} onChange={(e) => setDomainName(e.target.value)} />
       </div>
       <div className="field">
-        <label>Persona IDs (comma-separated)</label>
+        <label>Persona (đối tượng mục tiêu)</label>
         <input value={personaIds} onChange={(e) => setPersonaIds(e.target.value)} />
         <PersonaPicker value={personaIds} onChange={setPersonaIds} />
       </div>
       <div className="field">
-        <label>Objective</label>
+        <label>Mục tiêu</label>
         <input value={objective} onChange={(e) => setObjective(e.target.value)} />
       </div>
       <div className="modal-actions">
         <button className="btn" onClick={onClose}>
-          Cancel
+          Huỷ
         </button>
         <button
           className="btn btn-primary"
           disabled={!domainName || mutation.isPending}
           onClick={() => mutation.mutate()}
         >
-          {mutation.isPending ? 'Generating…' : 'Generate'}
+          {mutation.isPending ? 'Đang tạo…' : 'Tạo'}
         </button>
       </div>
     </Modal>
@@ -231,7 +231,7 @@ function DraftDetailModal({
           .filter(Boolean),
       }),
     onSuccess: () => {
-      setMessage('Draft saved.');
+      setMessage('Đã lưu bản nháp.');
       invalidateDetail();
     },
   });
@@ -239,7 +239,7 @@ function DraftDetailModal({
   const approveMutation = useMutation({
     mutationFn: () => approveDraft(id),
     onSuccess: () => {
-      setMessage('Draft approved.');
+      setMessage('Đã duyệt bản nháp.');
       invalidateDetail();
     },
   });
@@ -247,7 +247,7 @@ function DraftDetailModal({
   const rejectMutation = useMutation({
     mutationFn: () => rejectDraft(id, rejectReason),
     onSuccess: () => {
-      setMessage('Draft rejected.');
+      setMessage('Đã từ chối bản nháp.');
       invalidateDetail();
     },
   });
@@ -263,7 +263,7 @@ function DraftDetailModal({
   const mediaMutation = useMutation({
     mutationFn: (input: { filename: string; mimeType: string; contentBase64: string }) =>
       attachMedia({ draftId: id, ...input }),
-    onSuccess: () => setMessage('Media attached.'),
+    onSuccess: () => setMessage('Đã đính kèm media.'),
   });
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -289,7 +289,7 @@ function DraftDetailModal({
   const editable = data?.status === 'DRAFT';
 
   return (
-    <Modal title="Draft Detail" onClose={onClose}>
+    <Modal title="Chi tiết bản nháp" onClose={onClose}>
       {isLoading ? (
         <Loading />
       ) : error ? (
@@ -299,17 +299,17 @@ function DraftDetailModal({
           {message && <SuccessMessage>{message}</SuccessMessage>}
           {anyError != null && <ErrorMessage error={anyError} />}
           <div style={{ marginBottom: 'var(--space-sm)' }}>
-            Status: <StatusBadge status={data.status} />
+            Trạng thái: <StatusBadge status={data.status} />
             {!editable && (
-              <span className="muted"> · only DRAFT status is editable</span>
+              <span className="muted"> · chỉ sửa được khi ở trạng thái nháp (DRAFT)</span>
             )}
           </div>
           <div className="field">
-            <label>Title</label>
+            <label>Tiêu đề</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={!editable} />
           </div>
           <div className="field">
-            <label>Body</label>
+            <label>Nội dung</label>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -318,17 +318,17 @@ function DraftDetailModal({
             />
           </div>
           <div className="field">
-            <label>CTAs (comma-separated)</label>
+            <label>Lời kêu gọi hành động (cách nhau bởi dấu phẩy)</label>
             <input value={ctas} onChange={(e) => setCtas(e.target.value)} disabled={!editable} />
           </div>
 
           <div className="field">
-            <label>Attach media</label>
+            <label>Đính kèm media</label>
             <input type="file" onChange={onFileChange} />
           </div>
 
           <div className="field">
-            <label>Reject reason</label>
+            <label>Lý do từ chối</label>
             <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
           </div>
 
@@ -337,10 +337,10 @@ function DraftDetailModal({
               className="btn btn-danger btn-sm"
               disabled={deleteMutation.isPending}
               onClick={() => {
-                if (window.confirm('Delete this draft permanently?')) deleteMutation.mutate();
+                if (window.confirm('Xoá vĩnh viễn bản nháp này?')) deleteMutation.mutate();
               }}
             >
-              Delete
+              Xoá
             </button>
             <div className="topbar-spacer" />
             <button
@@ -348,21 +348,21 @@ function DraftDetailModal({
               disabled={!editable || editMutation.isPending}
               onClick={() => editMutation.mutate()}
             >
-              {editMutation.isPending ? 'Saving…' : 'Save'}
+              {editMutation.isPending ? 'Đang lưu…' : 'Lưu'}
             </button>
             <button
               className="btn"
               disabled={!rejectReason || rejectMutation.isPending}
               onClick={() => rejectMutation.mutate()}
             >
-              Reject
+              Từ chối
             </button>
             <button
               className="btn btn-primary"
               disabled={approveMutation.isPending}
               onClick={() => approveMutation.mutate()}
             >
-              {approveMutation.isPending ? 'Approving…' : 'Approve'}
+              {approveMutation.isPending ? 'Đang duyệt…' : 'Duyệt'}
             </button>
           </div>
         </>

@@ -126,22 +126,24 @@ export function Leads() {
 
   return (
     <div className="reveal">
-      <div className="page-header">
-        <div>
-          <div className="eyebrow">CRM tuyển dụng</div>
-          <h1 className="page-title">Leads</h1>
+      <div className="page-head">
+        <div className="page-head__titles">
+          <h1 className="page-head__title">
+            Quản lý <em>Leads</em>
+          </h1>
+          <p className="page-head__subtitle">Danh sách khách hàng tiềm năng cần tư vấn.</p>
         </div>
-        <div className="row-actions">
+        <div className="page-head__actions">
           <button className="btn btn-sm" disabled={exportBusy} onClick={() => handleExport('csv')}>
-            Export CSV
+            <Icon name="file-text" size={16} /> Xuất CSV
           </button>
           <button className="btn btn-sm" disabled={exportBusy} onClick={() => handleExport('json')}>
-            Export JSON
+            Xuất JSON
           </button>
           {isAdmin && (
             <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
               <Icon name="plus" size={16} />
-              New Lead
+              Thêm mới
             </button>
           )}
         </div>
@@ -151,7 +153,7 @@ export function Leads() {
 
       {/* Stats summary */}
       <div className="card">
-        <h2 className="card-title">Leads by Source</h2>
+        <h2 className="card-title">Leads theo nguồn</h2>
         {statsQuery.isLoading ? (
           <Loading variant="kpi" cols={4} />
         ) : statsQuery.error ? (
@@ -165,14 +167,14 @@ export function Leads() {
             ))}
           </div>
         ) : (
-          <Empty icon="bar-chart-3" label="No stats available." />
+          <Empty icon="bar-chart-3" label="Chưa có dữ liệu thống kê." />
         )}
       </div>
 
       {/* Filters */}
       <div className="toolbar">
         <div className="field">
-          <label>Source</label>
+          <label>Nguồn</label>
           <input
             value={pendingFilters.source ?? ''}
             onChange={(e) => setPendingFilters((f) => ({ ...f, source: e.target.value }))}
@@ -180,19 +182,19 @@ export function Leads() {
           />
         </div>
         <div className="field">
-          <label>Platform</label>
+          <label>Nền tảng</label>
           <input
             value={pendingFilters.platform ?? ''}
             onChange={(e) => setPendingFilters((f) => ({ ...f, platform: e.target.value }))}
           />
         </div>
         <div className="field">
-          <label>Status</label>
+          <label>Trạng thái</label>
           <select
             value={pendingFilters.status ?? ''}
             onChange={(e) => setPendingFilters((f) => ({ ...f, status: e.target.value }))}
           >
-            <option value="">All</option>
+            <option value="">Tất cả</option>
             {LEAD_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -201,7 +203,7 @@ export function Leads() {
           </select>
         </div>
         <div className="field">
-          <label>From</label>
+          <label>Từ ngày</label>
           <input
             type="date"
             value={pendingFilters.from ?? ''}
@@ -209,7 +211,7 @@ export function Leads() {
           />
         </div>
         <div className="field">
-          <label>To</label>
+          <label>Đến ngày</label>
           <input
             type="date"
             value={pendingFilters.to ?? ''}
@@ -217,103 +219,113 @@ export function Leads() {
           />
         </div>
         <button className="btn btn--secondary" onClick={applyFilters}>
-          Filter
+          Lọc
         </button>
         <button className="btn" onClick={resetFilters}>
-          Reset
+          Đặt lại
         </button>
       </div>
 
       {/* Table */}
-      <div className="card">
-        {leadsQuery.isLoading ? (
+      {leadsQuery.isLoading ? (
+        <div className="card">
           <Loading variant="table" rows={8} />
-        ) : leadsQuery.error ? (
-          <ErrorMessage error={leadsQuery.error} />
-        ) : leadsQuery.data && leadsQuery.data.items.length > 0 ? (
-          <>
-            <div className="table-wrap">
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Contact</th>
-                    <th>Source</th>
-                    <th>Platform</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                    <th>Actions</th>
+        </div>
+      ) : leadsQuery.error ? (
+        <ErrorMessage error={leadsQuery.error} />
+      ) : leadsQuery.data && leadsQuery.data.items.length > 0 ? (
+        <div className="table-card">
+          <div className="table-card__toolbar">
+            <span className="muted">Danh sách Lead</span>
+            <span className="table-card__count">
+              Hiển thị <strong>{leadsQuery.data.items.length}</strong> / <strong>{leadsQuery.data.total.toLocaleString('vi-VN')}</strong>
+            </span>
+          </div>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Tên Lead</th>
+                  <th>Liên hệ</th>
+                  <th>Nguồn</th>
+                  <th>Nền tảng</th>
+                  <th>Trạng thái</th>
+                  <th>Ngày tạo</th>
+                  <th style={{ textAlign: 'right' }}>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leadsQuery.data.items.map((lead) => (
+                  <tr key={lead.leadId}>
+                    <td>{lead.name ?? '—'}</td>
+                    <td>
+                      {lead.email ?? '—'}
+                      {lead.phone ? <div className="muted">{lead.phone}</div> : null}
+                    </td>
+                    <td>{lead.source}</td>
+                    <td>{lead.platform}</td>
+                    <td>
+                      <StatusBadge status={lead.status} />
+                    </td>
+                    <td>{formatDate(lead.createdAt)}</td>
+                    <td>
+                      <div className="row-actions row-reveal" style={{ justifyContent: 'flex-end' }}>
+                        <button className="btn btn-sm" onClick={() => setViewLeadId(lead.leadId)}>
+                          Xem
+                        </button>
+                        {isAdmin && (
+                          <>
+                            <button className="btn btn-sm" onClick={() => setEditLead(lead)}>
+                              Sửa
+                            </button>
+                            <button
+                              className="btn btn-sm"
+                              disabled={promoteMutation.isPending}
+                              onClick={() => confirmPromote(lead)}
+                              title="Tạo hồ sơ ứng viên từ lead này"
+                            >
+                              <Icon name="user-plus" size={14} /> Chuyển ứng viên
+                            </button>
+                            <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => confirmDelete(lead)}
+                            >
+                              Xóa
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {leadsQuery.data.items.map((lead) => (
-                    <tr key={lead.leadId}>
-                      <td>{lead.name ?? '—'}</td>
-                      <td>
-                        {lead.email ?? '—'}
-                        {lead.phone ? <div className="muted">{lead.phone}</div> : null}
-                      </td>
-                      <td>{lead.source}</td>
-                      <td>{lead.platform}</td>
-                      <td>
-                        <StatusBadge status={lead.status} />
-                      </td>
-                      <td>{formatDate(lead.createdAt)}</td>
-                      <td>
-                        <div className="row-actions">
-                          <button className="btn btn-sm" onClick={() => setViewLeadId(lead.leadId)}>
-                            View
-                          </button>
-                          {isAdmin && (
-                            <>
-                              <button className="btn btn-sm" onClick={() => setEditLead(lead)}>
-                                Edit
-                              </button>
-                              <button
-                                className="btn btn-sm"
-                                disabled={promoteMutation.isPending}
-                                onClick={() => confirmPromote(lead)}
-                                title="Tạo hồ sơ ứng viên từ lead này"
-                              >
-                                Chuyển thành ứng viên
-                              </button>
-                              <button
-                                className="btn btn-danger btn-sm"
-                                onClick={() => confirmDelete(lead)}
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="table-card__footer">
             <Pagination
               page={leadsQuery.data.page}
               limit={leadsQuery.data.limit}
               total={leadsQuery.data.total}
               onPage={(p) => setFilters((f) => ({ ...f, page: p }))}
             />
-          </>
-        ) : (
+          </div>
+        </div>
+      ) : (
+        <div className="card">
           <Empty
             icon="users"
-            label="No leads match your filters."
+            label="Không có Lead nào khớp bộ lọc."
             action={
               isAdmin ? (
                 <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
                   <Icon name="plus" size={16} />
-                  New Lead
+                  Thêm mới
                 </button>
               ) : undefined
             }
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {showCreate && isAdmin && (
         <CreateLeadModal
@@ -364,11 +376,11 @@ function CreateLeadModal({
   }
 
   return (
-    <Modal title="New Lead" onClose={onClose}>
+    <Modal title="Lead mới" onClose={onClose}>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
       <div className="grid grid-2">
         <div className="field">
-          <label>Name</label>
+          <label>Tên</label>
           <input value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} />
         </div>
         <div className="field">
@@ -376,23 +388,23 @@ function CreateLeadModal({
           <input value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} />
         </div>
         <div className="field">
-          <label>Phone</label>
+          <label>Số điện thoại</label>
           <input value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value)} />
         </div>
         <div className="field">
-          <label>Source *</label>
+          <label>Nguồn (bắt buộc)</label>
           <input value={form.source ?? ''} onChange={(e) => set('source', e.target.value)} />
         </div>
         <div className="field">
-          <label>Platform *</label>
+          <label>Nền tảng (bắt buộc)</label>
           <input value={form.platform ?? ''} onChange={(e) => set('platform', e.target.value)} />
         </div>
         <div className="field">
-          <label>Content Post ID</label>
+          <label>Mã bài thu hút (Content Post ID)</label>
           <input
             value={form.contentPostId ?? ''}
             onChange={(e) => set('contentPostId', e.target.value)}
-            placeholder="attribution post id"
+            placeholder="mã bài gắn nguồn lead"
           />
         </div>
         <div className="field">
@@ -411,14 +423,14 @@ function CreateLeadModal({
           />
         </div>
         <div className="field">
-          <label>Domain Category</label>
+          <label>Danh mục lĩnh vực</label>
           <input
             value={form.domainCategory ?? ''}
             onChange={(e) => set('domainCategory', e.target.value)}
           />
         </div>
         <div className="field">
-          <label>Content Topic</label>
+          <label>Chủ đề nội dung</label>
           <input
             value={form.contentTopic ?? ''}
             onChange={(e) => set('contentTopic', e.target.value)}
@@ -427,14 +439,14 @@ function CreateLeadModal({
       </div>
       <div className="modal-actions">
         <button className="btn" onClick={onClose}>
-          Cancel
+          Huỷ
         </button>
         <button
           className="btn btn-primary"
           disabled={mutation.isPending}
           onClick={() => mutation.mutate()}
         >
-          {mutation.isPending ? 'Creating…' : 'Create'}
+          {mutation.isPending ? 'Đang tạo…' : 'Tạo'}
         </button>
       </div>
     </Modal>
@@ -465,10 +477,10 @@ function EditLeadModal({
   });
 
   return (
-    <Modal title={`Edit Lead — ${lead.name ?? lead.leadId}`} onClose={onClose}>
+    <Modal title={`Sửa Lead — ${lead.name ?? lead.leadId}`} onClose={onClose}>
       {mutation.error != null && <ErrorMessage error={mutation.error} />}
       <div className="field">
-        <label>Status</label>
+        <label>Trạng thái</label>
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           {LEAD_STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -477,27 +489,27 @@ function EditLeadModal({
           ))}
         </select>
         <div className="muted" style={{ marginTop: 'var(--space-xs)' }}>
-          Illegal transitions are rejected by the server (409).
+          Chuyển trạng thái không hợp lệ sẽ bị máy chủ từ chối (409).
         </div>
       </div>
       <div className="field">
-        <label>Assigned To (user id)</label>
+        <label>Giao cho (mã người dùng)</label>
         <input value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} />
       </div>
       <div className="field">
-        <label>Note</label>
+        <label>Ghi chú</label>
         <textarea value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
       <div className="modal-actions">
         <button className="btn" onClick={onClose}>
-          Cancel
+          Huỷ
         </button>
         <button
           className="btn btn-primary"
           disabled={mutation.isPending}
           onClick={() => mutation.mutate()}
         >
-          {mutation.isPending ? 'Saving…' : 'Save'}
+          {mutation.isPending ? 'Đang lưu…' : 'Lưu'}
         </button>
       </div>
     </Modal>
@@ -511,7 +523,7 @@ function ViewLeadModal({ id, onClose }: { id: string; onClose: () => void }) {
   });
 
   return (
-    <Modal title="Lead Detail" onClose={onClose}>
+    <Modal title="Chi tiết Lead" onClose={onClose}>
       {isLoading ? (
         <Loading />
       ) : error ? (
@@ -519,19 +531,19 @@ function ViewLeadModal({ id, onClose }: { id: string; onClose: () => void }) {
       ) : data ? (
         <>
           <dl className="kv">
-            <dt>Lead ID</dt>
+            <dt>Mã Lead</dt>
             <dd>{data.leadId}</dd>
-            <dt>Name</dt>
+            <dt>Tên</dt>
             <dd>{data.name ?? '—'}</dd>
             <dt>Email</dt>
             <dd>{data.email ?? '—'}</dd>
-            <dt>Phone</dt>
+            <dt>Số điện thoại</dt>
             <dd>{data.phone ?? '—'}</dd>
-            <dt>Status</dt>
+            <dt>Trạng thái</dt>
             <dd>
               <StatusBadge status={data.status} />
             </dd>
-            <dt>Source / Platform</dt>
+            <dt>Nguồn / Nền tảng</dt>
             <dd>
               {data.source} / {data.platform}
             </dd>
@@ -539,17 +551,17 @@ function ViewLeadModal({ id, onClose }: { id: string; onClose: () => void }) {
             <dd>
               {[data.utmSource, data.utmMedium, data.utmCampaign].filter(Boolean).join(' · ') || '—'}
             </dd>
-            <dt>Content Post</dt>
+            <dt>Bài thu hút</dt>
             <dd>{data.contentPostId}</dd>
-            <dt>Assigned To</dt>
+            <dt>Giao cho</dt>
             <dd>{data.assignedTo ?? '—'}</dd>
-            <dt>Created</dt>
+            <dt>Tạo lúc</dt>
             <dd>{formatDate(data.createdAt)}</dd>
           </dl>
 
-          <h3 style={{ marginTop: 'var(--space-md)' }}>History</h3>
-          {data.history.length === 0 ? (
-            <Empty icon="clipboard-list" label="No history entries." />
+          <h3 style={{ marginTop: 'var(--space-md)' }}>Lịch sử</h3>
+          {(data.history ?? []).length === 0 ? (
+            <Empty icon="clipboard-list" label="Chưa có lịch sử." />
           ) : (
             <div className="table-wrap">
               <table className="data">
@@ -561,7 +573,7 @@ function ViewLeadModal({ id, onClose }: { id: string; onClose: () => void }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.history.map((h) => (
+                  {(data.history ?? []).map((h) => (
                     <tr key={h.id}>
                       <td>{formatDate(h.changedAt)}</td>
                       <td>

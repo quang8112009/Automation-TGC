@@ -46,24 +46,24 @@ export function Settings() {
       <div className="page-header">
         <div>
           <div className="eyebrow">Hệ thống</div>
-          <h1 className="page-title">Settings</h1>
+          <h1 className="page-title">Cài đặt</h1>
         </div>
       </div>
 
       <div className="card" style={{ maxWidth: 520 }}>
-        <h2 className="card-title">Profile</h2>
+        <h2 className="card-title">Hồ sơ tài khoản</h2>
         <dl className="kv">
-          <dt>User ID</dt>
+          <dt>Mã người dùng</dt>
           <dd>{user?.id}</dd>
-          <dt>Username</dt>
+          <dt>Tên đăng nhập</dt>
           <dd>{user?.username}</dd>
           <dt>Email</dt>
           <dd>{user?.email}</dd>
-          <dt>Role</dt>
+          <dt>Vai trò</dt>
           <dd>
             <span className="role-pill">{user?.role}</span>
           </dd>
-          <dt>Realtime</dt>
+          <dt>Kết nối thời gian thực</dt>
           <dd>
             <StatusBadge status={status === 'open' ? 'CURRENT' : 'STALE'} />{' '}
             <span className="muted">{status}</span>
@@ -71,7 +71,7 @@ export function Settings() {
         </dl>
         <div className="modal-actions">
           <button className="btn btn-danger" onClick={handleLogout}>
-            Logout
+            Đăng xuất
           </button>
         </div>
       </div>
@@ -128,7 +128,7 @@ function AiOperationsCard() {
           AI Operations
         </h2>
         <button className="btn btn-sm" onClick={() => void load()} disabled={loading}>
-          {loading ? 'Đang tải…' : 'Refresh'}
+          {loading ? 'Đang tải…' : 'Làm mới'}
         </button>
       </div>
       <p className="muted">Giám sát các lượt gọi AI tạo nội dung (AgentOps).</p>

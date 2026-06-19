@@ -2014,3 +2014,400 @@ pre.code {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* =====================================================================
+   REFERENCE-STYLE COMPOSITION PATTERNS (additive, v3.1)
+   Reusable building blocks that replicate the "Read Ideal File" reference
+   craft (editorial header + KPI cards + bento + table-card + plan card grid)
+   on top of the dark editorial tokens. All class names are NEW (additive);
+   no existing Class_Contract selector is renamed. Roll these out per page.
+   ===================================================================== */
+
+/* ---- Editorial page header: title + italic-serif accent + subtitle + actions */
+.page-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+@media (min-width: 640px) {
+  .page-head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+.page-head__titles { min-width: 0; }
+.page-head__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  line-height: 1.1;
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-strong);
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.page-head__title em {
+  font-family: var(--font-heading);
+  font-style: italic;
+  font-weight: 500;
+  color: var(--color-accent);
+}
+.page-head__subtitle {
+  color: var(--text-muted);
+  margin: var(--space-xs) 0 0;
+  font-size: var(--fs-body);
+}
+.page-head__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+/* ---- KPI card (icon box + big mono value + delta row) -------------------- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+}
+.kpi-card--danger {
+  border-color: rgba(229, 83, 75, 0.30);
+  background: rgba(229, 83, 75, 0.06);
+}
+.kpi-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+.kpi-card__label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+}
+.kpi-card__value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 40px;
+  line-height: 1;
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+  margin-top: var(--space-sm);
+}
+.kpi-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+.kpi-card--danger .kpi-card__icon {
+  background: rgba(229, 83, 75, 0.18);
+  color: var(--danger-fg);
+}
+.kpi-card__delta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+/* ---- 3-col bento (feature 2-span + side column) ------------------------- */
+.bento-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-lg);
+}
+.bento-3__feature { grid-column: span 2; }
+.bento-3__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+@media (max-width: 1024px) {
+  .bento-3 { grid-template-columns: 1fr; }
+  .bento-3__feature { grid-column: 1 / -1; }
+}
+
+/* ---- Vertical funnel bars (amber gradient, value on hover) --------------- */
+.funnel-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  height: 280px;
+  padding-top: var(--space-xl);
+}
+.funnel-bars__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  height: 100%;
+}
+.funnel-bars__track {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  overflow: hidden;
+  transition: background var(--dur-base) var(--ease);
+}
+.funnel-bars__col:hover .funnel-bars__track { background: rgba(255, 255, 255, 0.08); }
+.funnel-bars__fill {
+  width: 100%;
+  background: linear-gradient(to top, rgba(224, 166, 64, 0.18), rgba(224, 166, 64, 0.55));
+  border-top: 1px solid var(--color-accent);
+  transition: height var(--dur-reveal) var(--ease-editorial);
+  min-height: 4px;
+}
+.funnel-bars__value {
+  position: absolute;
+  top: var(--space-sm);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.funnel-bars__col:hover .funnel-bars__value { opacity: 1; }
+.funnel-bars__label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ---- Feed list (bullet dot + title + mono meta) ------------------------- */
+.feed-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border);
+}
+.feed-item:last-child { border-bottom: none; padding-bottom: 0; }
+.feed-item__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+.feed-item__title { font-size: var(--fs-sm); font-weight: var(--fw-medium); color: var(--text-strong); }
+.feed-item__meta { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
+
+/* ---- Table card: card-wrapped table + toolbar + pagination footer ------- */
+.table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: var(--space-lg);
+}
+.table-card__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+.table-card__count { font-size: var(--fs-sm); color: var(--text-muted); }
+.table-card__count strong { color: var(--text-strong); font-family: var(--font-mono); font-weight: var(--fw-semibold); }
+.table-card .table-wrap { border: none; border-radius: 0; }
+.table-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+/* row-hover reveals actions */
+.row-reveal { opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+table.data tbody tr:hover .row-reveal,
+table.data tbody tr:focus-within .row-reveal { opacity: 1; }
+
+/* ---- Numbered pagination ------------------------------------------------ */
+.pagination__pages { display: flex; align-items: center; gap: var(--space-xs); font-family: var(--font-mono); }
+.pagination__page {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.pagination__page:hover { background: rgba(255, 255, 255, 0.05); color: var(--text-strong); }
+.pagination__page--active { background: var(--color-gold-soft); color: var(--color-accent); font-weight: var(--fw-semibold); }
+
+/* ---- Card grid + rich entity card (e.g. content plans) ------------------ */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-lg);
+}
+.entity-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--dur-base) var(--ease);
+}
+.entity-card:hover { border-color: rgba(224, 166, 64, 0.30); }
+.entity-card__body { padding: var(--space-lg); flex: 1; display: flex; flex-direction: column; }
+.entity-card__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+  margin: var(--space-sm) 0;
+  transition: color var(--dur-fast) var(--ease);
+}
+.entity-card:hover .entity-card__title { color: var(--color-accent); }
+.entity-card__desc {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: var(--space-md);
+}
+.entity-card__meta {
+  margin-top: auto;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.entity-card__meta .mono { font-family: var(--font-mono); }
+.entity-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid var(--border);
+}
+.card--dashed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-height: 240px;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
+}
+.card--dashed:hover { color: var(--color-accent); border-color: rgba(224, 166, 64, 0.50); background: rgba(224, 166, 64, 0.05); }
+
+/* ---- Progress bar (amber fill) ------------------------------------------ */
+.progress { height: 6px; width: 100%; background: rgba(255, 255, 255, 0.05); border-radius: var(--radius-pill); overflow: hidden; }
+.progress__fill { height: 100%; background: var(--color-accent); border-radius: var(--radius-pill); transition: width var(--dur-reveal-lg) var(--ease-editorial); }
+
+/* ---- Avatar stack ------------------------------------------------------- */
+.avatar-stack { display: flex; }
+.avatar-stack__item {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--surface);
+  background: rgba(255, 255, 255, 0.10);
+  margin-left: -8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-body);
+}
+.avatar-stack__item:first-child { margin-left: 0; }
+
+/* ---- Filter chips row --------------------------------------------------- */
+.chip-row { display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center; margin-bottom: var(--space-md); }
+.chip--filter {
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.chip--filter:hover { color: var(--text-strong); }
+.chip--filter.chip--active {
+  border-style: solid;
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--text-strong);
+}
+
+/* Workflows — "Quy trình này làm gì?" explainer steps + active-step highlight. */
+.how-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.how-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.how-step .step-index {
+  flex: 0 0 auto;
+}
+.step-row--current {
+  border-color: var(--primary, #2563eb);
+  box-shadow: 0 0 0 1px var(--primary, #2563eb) inset;
+}

@@ -10,9 +10,10 @@
  * loads. Login/Register stay eager (tiny, and they gate everything else).
  */
 import { Suspense, lazy } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { RequireAuth } from './components/RequireAuth';
 import { Layout } from './components/Layout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { RealtimeProvider } from './realtime/RealtimeContext';
 import { Loading } from './components/ui';
 import { Login } from './pages/Login';
@@ -77,11 +78,13 @@ function PageFallback() {
 }
 
 export function App() {
+  const location = useLocation();
   return (
-    <Suspense fallback={<PageFallback />}>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+    <ErrorBoundary resetKey={location.pathname}>
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
         <Route element={<ProtectedShell />}>
           <Route path="/" element={<Dashboard />} />
@@ -226,7 +229,8 @@ export function App() {
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Suspense>
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }

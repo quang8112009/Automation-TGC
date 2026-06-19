@@ -447,8 +447,17 @@ function ReportDetailModal({
 }
 
 function ReportContentView({ report }: { report: CompanyReportView }) {
-  const { content } = report;
-  const cp = content.contentPerformance;
+  const content = report.content ?? ({} as CompanyReportView['content']);
+  const cp = content.contentPerformance ?? {
+    publishedCount: 0,
+    avgConversionRate: 'INSUFFICIENT_DATA' as const,
+    avgEngagementRate: 'INSUFFICIENT_DATA' as const,
+    avgCtaClickRate: 'INSUFFICIENT_DATA' as const,
+  };
+  const funnelByMarket = content.recruitmentFunnelByMarket ?? [];
+  const leadsBySource = content.leadsBySource ?? [];
+  const highlights = content.highlights ?? [];
+  const recommendations = content.recommendations ?? [];
 
   return (
     <>
@@ -470,7 +479,7 @@ function ReportContentView({ report }: { report: CompanyReportView }) {
       </dl>
 
       <h3 style={{ marginTop: 'var(--space-lg)' }}>Phễu tuyển dụng theo thị trường</h3>
-      {content.recruitmentFunnelByMarket.length === 0 ? (
+      {funnelByMarket.length === 0 ? (
         <div className="muted">Chưa đủ dữ liệu.</div>
       ) : (
         <div className="table-wrap">
@@ -482,12 +491,12 @@ function ReportContentView({ report }: { report: CompanyReportView }) {
               </tr>
             </thead>
             <tbody>
-              {content.recruitmentFunnelByMarket.map((m) => (
+              {funnelByMarket.map((m) => (
                 <tr key={m.market}>
                   <td>{m.market}</td>
                   <td>
                     <div className="inline-list">
-                      {Object.entries(m.stageCounts).map(([stage, count]) => (
+                      {Object.entries(m.stageCounts ?? {}).map(([stage, count]) => (
                         <span key={stage} className="badge badge-blue">
                           {stage}: {count}
                         </span>
@@ -502,11 +511,11 @@ function ReportContentView({ report }: { report: CompanyReportView }) {
       )}
 
       <h3 style={{ marginTop: 'var(--space-lg)' }}>Lead theo nguồn</h3>
-      {content.leadsBySource.length === 0 ? (
+      {leadsBySource.length === 0 ? (
         <div className="muted">Chưa đủ dữ liệu.</div>
       ) : (
         <div className="inline-list">
-          {content.leadsBySource.map((b) => (
+          {leadsBySource.map((b) => (
             <span key={b.source} className="badge badge-blue">
               {b.source || '(không rõ)'}: {b.count}
             </span>
@@ -515,22 +524,22 @@ function ReportContentView({ report }: { report: CompanyReportView }) {
       )}
 
       <h3 style={{ marginTop: 'var(--space-lg)' }}>Điểm nổi bật</h3>
-      {content.highlights.length === 0 ? (
+      {highlights.length === 0 ? (
         <div className="muted">Không có điểm nổi bật.</div>
       ) : (
         <ul>
-          {content.highlights.map((h, i) => (
+          {highlights.map((h, i) => (
             <li key={i}>{h}</li>
           ))}
         </ul>
       )}
 
       <h3 style={{ marginTop: 'var(--space-lg)' }}>Khuyến nghị</h3>
-      {content.recommendations.length === 0 ? (
+      {recommendations.length === 0 ? (
         <div className="muted">Chưa đủ dữ liệu để đưa ra khuyến nghị.</div>
       ) : (
         <ul>
-          {content.recommendations.map((r, i) => (
+          {recommendations.map((r, i) => (
             <li key={i}>{r}</li>
           ))}
         </ul>
