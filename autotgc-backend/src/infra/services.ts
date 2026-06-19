@@ -14,6 +14,7 @@ import { YouTubeAdapter } from '../platforms/youtubeAdapter';
 import { ZaloAdapter } from '../platforms/zaloAdapter';
 import { TokenManager } from '../tokens/tokenManager';
 import type { TokenRefresher } from '../tokens/tokenManager';
+import { createManualModeRefresher } from '../tokens/platformTokenRefresher';
 import { PrismaAlertDispatcher } from './alerts';
 import type { AlertDispatcher } from './alerts';
 import { AiTextClient } from './aiTextClient';
@@ -57,12 +58,14 @@ export interface ComposedServices {
   mediaRenderProvider?: RenderProvider;
 }
 
-/** Default no-op refresher: real per-platform token exchange requires live creds. */
-const noopRefresher: TokenRefresher = {
-  async exchange(): Promise<void> {
-    // No external exchange in Phase 1 without credentials; refresh bumps metadata only.
-  },
-};
+/**
+ * Default refresher: auto token exchange is NOT wired (it additionally needs a
+ * writable place to persist the rotated token value, which the DB-free
+ * Secret_Store design intentionally lacks). Manual-mode fails honestly so the
+ * refresh cycle keeps the real expiry and raises REFRESH_FAILURE instead of
+ * silently masking a soon-to-expire token. See platformTokenRefresher.ts.
+ */
+const defaultRefresher: TokenRefresher = createManualModeRefresher();
 
 export function composeServices(prisma: PrismaClient, secrets: SecretLoader): ComposedServices {
   // Shared domain event bus. REDIS_URL is the same source config.redisUrl uses;
@@ -70,7 +73,7 @@ export function composeServices(prisma: PrismaClient, secrets: SecretLoader): Co
   const eventBus = getEventBus(secrets.optional('REDIS_URL') ?? undefined);
 
   const alerts = new PrismaAlertDispatcher(prisma);
-  const tokenManager = new TokenManager(prisma, secrets, noopRefresher, alerts, undefined, eventBus);
+  const tokenManager = new TokenManager(prisma, secrets, defaultRefresher, alerts, undefined, eventBus);
 
   const registry = new AdapterRegistry();
   registry.register(new FacebookAdapter({ tokens: tokenManager }));
