@@ -40,7 +40,7 @@ mkdir -p "${BACKUP_DIR}"
 BACKUP_FILE="${BACKUP_DIR}/autotgc-$(date +%Y%m%d-%H%M%S).sql"
 # Derive connection from the app's .env DATABASE_URL; pg_dump must succeed before
 # we allow the destructive push. If the backup fails, abort (set -e + explicit check).
-if sudo -u autotgc bash -lc "cd ${APP_DIR} && set -a && . ./.env && set +a && pg_dump \"\$DATABASE_URL\"" > "${BACKUP_FILE}" 2>/tmp/pgdump.err; then
+if sudo -u autotgc bash -lc 'cd '"${APP_DIR}"' && set -a && . ./.env && set +a && DUMP_URL="${DATABASE_URL%%\?*}" && PGD="$(ls /usr/lib/postgresql/*/bin/pg_dump 2>/dev/null | sort -V | tail -1)"; "${PGD:-pg_dump}" "$DUMP_URL"' > "${BACKUP_FILE}" 2>/tmp/pgdump.err; then
   echo "BACKUP_OK=${BACKUP_FILE} ($(wc -c < "${BACKUP_FILE}") bytes)"
 else
   echo "BACKUP_FAILED — refusing to run destructive db push. See /tmp/pgdump.err:"; tail -5 /tmp/pgdump.err
