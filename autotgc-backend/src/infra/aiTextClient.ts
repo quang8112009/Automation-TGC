@@ -113,11 +113,33 @@ export class AiTextClient {
     private readonly apiKey: string | undefined,
     private readonly config: AiTextConfig,
     httpClient?: HttpClient,
+    /**
+     * Optional default `max_tokens` cap applied when a caller does NOT pass its
+     * own `GenerateOptions.maxTokens`. Worst-case guard on generation length +
+     * latency. `undefined` (the default) preserves the historic uncapped request
+     * shape, so behaviour is unchanged unless an operator sets `GEMINI_MAX_TOKENS`.
+     */
+    private readonly defaultMaxTokens?: number,
   ) {
     // When no client is injected, build one that already enforces the timeout as
     // its default; an injected client (tests) is used as-is but still gets a
     // per-request `timeoutMs` below.
     this.http = httpClient ?? createFetchHttpClient(undefined, this.config.timeout);
+  }
+
+  /**
+   * Resolve the effective `max_tokens` for a request: an explicit caller option
+   * wins; otherwise the configured default cap (if any). Returns `undefined`
+   * when neither is set, so `max_tokens` is omitted entirely (historic shape).
+   */
+  private effectiveMaxTokens(options?: GenerateOptions): number | undefined {
+    const caller = options?.maxTokens;
+    // A valid positive per-call value wins; otherwise fall back to the
+    // configured default cap (also only when positive); else omit max_tokens.
+    if (typeof caller === 'number' && caller > 0) return Math.floor(caller);
+    return typeof this.defaultMaxTokens === 'number' && this.defaultMaxTokens > 0
+      ? Math.floor(this.defaultMaxTokens)
+      : undefined;
   }
 
   /** Generate text for a prompt. Throws 502 if the AI service is not configured. */
@@ -141,8 +163,9 @@ export class AiTextClient {
       model: this.config.model,
       messages: [{ role: 'user', content: prompt }],
     };
-    if (typeof options?.maxTokens === 'number' && options.maxTokens > 0) {
-      body.max_tokens = Math.floor(options.maxTokens);
+    const effMax = this.effectiveMaxTokens(options);
+    if (effMax !== undefined) {
+      body.max_tokens = effMax;
     }
     if (typeof options?.temperature === 'number') {
       body.temperature = options.temperature;
@@ -204,8 +227,9 @@ export class AiTextClient {
       stream: true,
       messages: [{ role: 'user', content: prompt }],
     };
-    if (typeof options?.maxTokens === 'number' && options.maxTokens > 0) {
-      body.max_tokens = Math.floor(options.maxTokens);
+    const effMax = this.effectiveMaxTokens(options);
+    if (effMax !== undefined) {
+      body.max_tokens = effMax;
     }
     if (typeof options?.temperature === 'number') {
       body.temperature = options.temperature;

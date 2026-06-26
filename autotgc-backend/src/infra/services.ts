@@ -18,7 +18,7 @@ import { createManualModeRefresher } from '../tokens/platformTokenRefresher';
 import { PrismaAlertDispatcher } from './alerts';
 import type { AlertDispatcher } from './alerts';
 import { AiTextClient } from './aiTextClient';
-import { parseAiTextConfigFromSecrets } from './aiTextConfig';
+import { parseAiTextConfigFromSecrets, parseMaxTokensEnv } from './aiTextConfig';
 import { InstrumentedContentGenerator, InMemoryAiTelemetrySink } from './aiTelemetry';
 import { AiTextChatCompleter } from './aiChatCompleter';
 import { KNOWLEDGE_SEARCH_TOOL_SCHEMA } from './knowledgeSearchTool';
@@ -119,7 +119,12 @@ export function composeServices(prisma: PrismaClient, secrets: SecretLoader): Co
   if (!parsed.ok) {
     throw new Error(`AI text config invalid: key "${parsed.invalidKey}" ${parsed.message}`);
   }
-  const rawAiTextClient = new AiTextClient(secrets.optional('GEMINI_API_KEY'), parsed.config);
+  const rawAiTextClient = new AiTextClient(
+    secrets.optional('GEMINI_API_KEY'),
+    parsed.config,
+    undefined,
+    parseMaxTokensEnv(secrets.optional('GEMINI_MAX_TOKENS')),
+  );
   // AgentOps: wrap the client so every AI text call is timed + classified into a
   // bounded in-memory telemetry window (fallback-rate / latency / error codes),
   // without changing the seam contract or the AI-OPTIONAL fallback path.

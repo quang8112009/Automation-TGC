@@ -69,6 +69,34 @@ export const AI_TEXT_DEFAULT_TIMEOUT_MS = 20_000;
 export const AI_TEXT_MIN_TIMEOUT_MS = 100;
 
 /**
+ * Parse an optional default `max_tokens` cap from a raw env value
+ * (`GEMINI_MAX_TOKENS`). Pure & exported for testing.
+ *
+ * Returns a positive integer when the value is a finite number `> 0` (numeric
+ * strings parsed, fractional values floored); otherwise `undefined` — meaning
+ * "no default cap", which preserves the historic uncapped request shape. This is
+ * a WORST-CASE guard on generation length (and latency), NOT a per-call cap:
+ * an explicit `GenerateOptions.maxTokens` from the caller always takes
+ * precedence over this default.
+ */
+export function parseMaxTokensEnv(raw: string | number | undefined): number | undefined {
+  let value: number;
+  if (typeof raw === 'number') {
+    value = raw;
+  } else if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed === '') return undefined;
+    value = Number(trimmed);
+  } else {
+    return undefined;
+  }
+  if (Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+  return undefined;
+}
+
+/**
  * Normalize a raw timeout value. Valid IFF it is a finite number, `> 0`, AND
  * `>= AI_TEXT_MIN_TIMEOUT_MS` (100). Numeric strings are parsed. Any other case
  * (absent, empty/non-numeric string, NaN, Infinity, <= 0, < 100) falls back to

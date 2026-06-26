@@ -33,7 +33,7 @@ import { PublishingWorker } from '../content/publishingWorker';
 import type { AdapterRegistry } from '../platforms/registry';
 import type { AlertDispatcher } from './alerts';
 import { AiTextClient } from './aiTextClient';
-import { parseAiTextConfigFromSecrets } from './aiTextConfig';
+import { parseAiTextConfigFromSecrets, parseMaxTokensEnv } from './aiTextConfig';
 import { getEventBus } from './events';
 import { ReportService } from '../reporting/reportService';
 import { registerReportJobs } from '../reporting/reportScheduler';
@@ -408,7 +408,12 @@ function buildAiTextClient(secrets: SecretLoader): AiTextClient {
   if (!parsed.ok) {
     throw new Error(`AI text config invalid: key "${parsed.invalidKey}" ${parsed.message}`);
   }
-  return new AiTextClient(secrets.optional('GEMINI_API_KEY'), parsed.config);
+  return new AiTextClient(
+    secrets.optional('GEMINI_API_KEY'),
+    parsed.config,
+    undefined,
+    parseMaxTokensEnv(secrets.optional('GEMINI_MAX_TOKENS')),
+  );
 }
 
 /**
