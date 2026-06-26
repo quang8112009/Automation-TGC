@@ -26,6 +26,7 @@
 import type { ContentGenerator } from '../strategy/personaService';
 import type { KnowledgeNote, RoadmapEstimate } from './types';
 import { enforceAiGeneratedFlag } from '../infra/aiOptional';
+import { assertNoSecrets } from '../infra/secretGuard';
 
 /** Result of a {@link RoadmapNarrative.narrate} call. */
 export interface NarrateResult {
@@ -159,7 +160,9 @@ export function buildNarrativePrompt(
       'hay bảo đảm bất kỳ kết quả định cư nào. Nếu một chỉ số là "Chưa đủ dữ liệu", hãy nói rõ điều đó.',
   );
 
-  return segments.join('\n\n');
+  const prompt = segments.join('\n\n');
+  assertNoSecrets(prompt, 'ROADMAP_PROMPT_SECRET_DETECTED');
+  return prompt;
 }
 
 /**

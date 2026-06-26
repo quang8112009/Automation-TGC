@@ -56,6 +56,7 @@ model UserAccount {
   sessions         JwtSession[]
   assignedLeads    Lead[]
   notifications    Notification[] @relation("UserNotifications")
+  assistantConversations AssistantConversation[]
 }
 
 model JwtSession {
@@ -548,11 +549,58 @@ model KnowledgeEntry {
   tags      Json     @default("[]")
   market    String?
   active    Boolean  @default(true)
+  // Cached embedding vector (number[]) for semantic (cosine) retrieval. NULL
+  // until an ADMIN reindex computes it; absent it, retrieval degrades to the
+  // deterministic keyword/tag ranking. Never contains secrets.
+  embedding Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([category])
   @@index([active])
+}
+
+// ===========================================================================
+// Assistant conversational memory (additive). Persists multi-turn grounded-
+// assistant threads so the agent carries short-term context across turns. A
+// conversation is PRIVATE to exactly one UserAccount; the route layer enforces
+// owner-only access (there is no cross-user read, not even for ADMIN).
+// ===========================================================================
+
+enum AssistantRole {
+  USER
+  ASSISTANT
+}
+
+model AssistantConversation {
+  id        String             @id @default(uuid())
+  userId    String // owner (UserAccount.id); private to this user
+  user      UserAccount        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String? // optional human label (derived from the first question)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  messages  AssistantMessage[]
+
+  // Composite (userId, updatedAt): the list query is `where userId order by
+  // updatedAt desc`, so this index serves the filter AND the sort in one shot
+  // (and still covers userId-only lookups via the prefix).
+  @@index([userId, updatedAt])
+}
+
+model AssistantMessage {
+  id             String                @id @default(uuid())
+  conversationId String
+  conversation   AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           AssistantRole
+  content        String
+  // True ONLY for ASSISTANT messages produced by the AI provider (never for a
+  // deterministic fallback) — mirrors the AI-OPTIONAL `aiGenerated` flag.
+  aiGenerated    Boolean               @default(false)
+  createdAt      DateTime              @default(now())
+
+  // Composite (conversationId, createdAt): history reads filter by conversation
+  // and order by createdAt, so this lets Postgres satisfy both without a sort.
+  @@index([conversationId, createdAt])
 }
 
 // ===========================================================================

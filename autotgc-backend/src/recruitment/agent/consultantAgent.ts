@@ -21,6 +21,7 @@ import type { ContentGenerator } from '../../strategy/personaService';
 import type { KnowledgeService } from '../knowledge/knowledgeService';
 import { COMPANY_IDENTITY } from '../knowledge/knowledgeBase';
 import { enforceAiGeneratedFlag } from '../../infra/aiOptional';
+import { assertNoSecrets } from '../../infra/secretGuard';
 
 /** Candidate context the consultant can use to tailor answers and matches. */
 export interface CandidateContext {
@@ -125,7 +126,9 @@ export function buildSystemPrompt(
       `Câu hỏi của ứng viên: "${question.trim()}"`,
   );
 
-  return segments.join('\n\n');
+  const prompt = segments.join('\n\n');
+  assertNoSecrets(prompt, 'CONSULTANT_PROMPT_SECRET_DETECTED');
+  return prompt;
 }
 
 /**
@@ -275,7 +278,9 @@ export function buildOutreachPrompt(
       `mời trao đổi thêm và để lại hotline ${COMPANY_IDENTITY.hotline.join(' / ')}. Không bịa chi phí/điều kiện.`,
   );
 
-  return segments.join('\n\n');
+  const prompt = segments.join('\n\n');
+  assertNoSecrets(prompt, 'CONSULTANT_PROMPT_SECRET_DETECTED');
+  return prompt;
 }
 
 /** Pure grounded-fallback outreach message template (no AI needed). */

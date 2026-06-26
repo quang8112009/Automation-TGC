@@ -19,6 +19,7 @@ import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../auth/jwt';
 import { requireAuth, rbacGuard } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import { PartnerService } from './partnerService';
 import type { CreatePartnerInput, UpdatePartnerInput } from './partnerService';
 import { DestinationService } from './destinationService';
@@ -27,6 +28,9 @@ import type { CreateDestinationInput, UpdateDestinationInput } from './destinati
 export interface PartnerRouteDeps {
   prisma: PrismaClient;
   jwt: JwtService;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 interface IdParams {
@@ -53,15 +57,15 @@ export async function registerPartnerRoutes(
   app: FastifyInstance,
   deps: PartnerRouteDeps,
 ): Promise<void> {
-  const { prisma, jwt } = deps;
+  const { prisma, jwt, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const partnerService = new PartnerService(prisma);
   const destinationService = new DestinationService(prisma);
 
   // Writes are ADMIN-only (settings/update); reads map to lead_management/read
   // so SALES can read but not mutate. Neither carries an ownerUserId.
-  const writeGuard = rbacGuard(() => ({ module: 'settings', action: 'update' }));
-  const readGuard = rbacGuard(() => ({ module: 'lead_management', action: 'read' }));
+  const writeGuard = rbacGuard(() => ({ module: 'settings', action: 'update' }), auditor);
+  const readGuard = rbacGuard(() => ({ module: 'lead_management', action: 'read' }), auditor);
 
   // ---- Partners (đối tác đã hợp tác) ----------------------------------------
   app.post(

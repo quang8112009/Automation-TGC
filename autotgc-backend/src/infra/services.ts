@@ -23,6 +23,9 @@ import { InstrumentedContentGenerator, InMemoryAiTelemetrySink } from './aiTelem
 import { AiTextChatCompleter } from './aiChatCompleter';
 import { KNOWLEDGE_SEARCH_TOOL_SCHEMA } from './knowledgeSearchTool';
 import type { ChatCompleter } from './aiAgentLoop';
+import type { TextStreamer } from './assistantRoutes';
+import { buildEmbedderFromConfig } from './embeddingClient';
+import type { Embedder } from './embeddingClient';
 import type { ContentGenerator } from '../strategy/personaService';
 import { MediaService } from '../content/mediaService';
 import { getEventBus } from './events';
@@ -51,6 +54,18 @@ export interface ComposedServices {
    * deterministic fallback path). Offers the knowledge_search tool schema.
    */
   assistantCompleter?: ChatCompleter;
+  /**
+   * Streaming text client (DeepSeek) for the assistant SSE endpoint, or
+   * `undefined` when AI text is not configured (the stream then emits the
+   * deterministic grounded fallback).
+   */
+  assistantStreamer?: TextStreamer;
+  /**
+   * Embedder enabling HYBRID semantic retrieval for grounding. `undefined`
+   * unless BOTH a key and `GEMINI_EMBEDDING_MODEL` are configured — so the
+   * system runs deterministic keyword retrieval by default.
+   */
+  assistantEmbedder?: Embedder;
   /**
    * Image+video render provider for brand assets. `undefined` when NEITHER the
    * image nor the video modality is configured (assets then stay SPEC_READY).
@@ -118,6 +133,18 @@ export function composeServices(prisma: PrismaClient, secrets: SecretLoader): Co
     assistantApiKey && assistantApiKey.trim().length > 0
       ? new AiTextChatCompleter(assistantApiKey, parsed.config, [KNOWLEDGE_SEARCH_TOOL_SCHEMA])
       : undefined;
+  // Streaming seam for the assistant SSE endpoint: the RAW (un-instrumented)
+  // text client already exposes `streamContent`. Built only when a key is
+  // present; absent it the stream emits the deterministic fallback.
+  const assistantStreamer: TextStreamer | undefined =
+    assistantApiKey && assistantApiKey.trim().length > 0 ? rawAiTextClient : undefined;
+  // Optional embedder for hybrid semantic retrieval. Opt-in: requires BOTH a key
+  // and GEMINI_EMBEDDING_MODEL; otherwise grounding stays keyword-only.
+  const assistantEmbedder: Embedder | undefined = buildEmbedderFromConfig(
+    assistantApiKey,
+    secrets.optional('GEMINI_EMBEDDING_MODEL'),
+    parsed.config,
+  );
   const mediaService = new MediaService(prisma, secrets.optional('MEDIA_DIR'));
 
   // Image + video render provider for brand assets. Reads its own env
@@ -136,6 +163,8 @@ export function composeServices(prisma: PrismaClient, secrets: SecretLoader): Co
     eventBus,
     aiTelemetry,
     assistantCompleter,
+    assistantStreamer,
+    assistantEmbedder,
     mediaRenderProvider,
   };
 }

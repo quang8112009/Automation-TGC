@@ -18,6 +18,7 @@ import type { JwtService } from '../auth/jwt';
 import type { AppConfig } from '../infra/config';
 import type { EventBus } from '../infra/events';
 import { requireAuth, rbacGuard } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import { verifySignature } from '../infra/hmac';
 import { recordWebhookDelivery } from '../infra/webhookReplay';
 import { IntakeService, NOOP_SENDER } from './intakeService';
@@ -33,6 +34,9 @@ export interface IntakeRouteDeps {
   eventBus?: EventBus;
   /** Outbound transport; defaults to a no-op when no messaging tokens are wired. */
   sender?: ChannelSender;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 function asString(v: unknown): string | undefined {
@@ -65,7 +69,7 @@ export function parseZaloMessage(payload: unknown): { senderId: string; text: st
 }
 
 export async function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps): Promise<void> {
-  const { prisma, jwt, config } = deps;
+  const { prisma, jwt, config, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const service = new IntakeService(prisma, deps.sender ?? NOOP_SENDER, deps.eventBus);
 
@@ -177,12 +181,12 @@ export async function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRou
   });
 
   // ---- Consultant views (authenticated) -------------------------------------
-  const readGuard = rbacGuard(() => ({ module: 'lead_management', action: 'read' }));
+  const readGuard = rbacGuard(() => ({ module: 'lead_management', action: 'read' }), auditor);
   // /simulate WRITES (creates a Lead/IntakeConversation), so it must require a
   // write capability — not the read scope. Under the pure RBAC policy SALES is
   // assigned-only on lead_management writes; with no resource owner here it is
   // effectively ADMIN-only, which is correct for a test/widget inject endpoint.
-  const createGuard = rbacGuard(() => ({ module: 'lead_management', action: 'create' }));
+  const createGuard = rbacGuard(() => ({ module: 'lead_management', action: 'create' }), auditor);
 
   app.get(
     '/api/v1/intake/conversations',

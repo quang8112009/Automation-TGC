@@ -16,6 +16,7 @@ import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../auth/jwt';
 import { getAuth, rbacGuard, requireAuth } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import { ValidationError } from '../infra/errors';
 import { ConsentService } from './consentService';
 import { ErasureService } from './erasureService';
@@ -23,6 +24,9 @@ import { ErasureService } from './erasureService';
 export interface PrivacyRouteDeps {
   prisma: PrismaClient;
   jwt: JwtService;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 function asString(v: unknown): string | undefined {
@@ -30,15 +34,15 @@ function asString(v: unknown): string | undefined {
 }
 
 export function registerPrivacyRoutes(app: FastifyInstance, deps: PrivacyRouteDeps): void {
-  const { prisma, jwt } = deps;
+  const { prisma, jwt, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const consent = new ConsentService(prisma);
   const erasure = new ErasureService(prisma);
 
   // settings is ADMIN-only under the pure RBAC policy (SALES -> 403). Static
   // targets — no per-resource owner resolution needed.
-  const readGuard = rbacGuard(() => ({ module: 'settings', action: 'read' }));
-  const writeGuard = rbacGuard(() => ({ module: 'settings', action: 'update' }));
+  const readGuard = rbacGuard(() => ({ module: 'settings', action: 'read' }), auditor);
+  const writeGuard = rbacGuard(() => ({ module: 'settings', action: 'update' }), auditor);
 
   // Record a consent event (GRANTED/WITHDRAWN). Append-only.
   app.post(

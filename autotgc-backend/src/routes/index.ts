@@ -132,11 +132,36 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     return reply.code(200).send(result);
   });
 
-  app.post('/api/auth/logout', { preHandler: auth }, async (request, reply) => {
+  // Logout. Accepts EITHER a valid access token (Authorization header) OR a
+  // refreshToken in the body, so a client can terminate its session even after
+  // the access token has expired (the refresh token would otherwise stay usable
+  // for the full refresh TTL). No `requireAuth` preHandler: an expired access
+  // token must still be able to log out via its refresh token.
+  app.post('/api/auth/logout', async (request, reply) => {
     const header = request.headers.authorization ?? '';
-    const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-    await authService.logout(token);
-    return reply.code(200).send({ status: 'ok' });
+    const accessToken = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+    const body = (request.body ?? {}) as { refreshToken?: string };
+    const refreshToken =
+      typeof body.refreshToken === 'string' ? body.refreshToken.trim() : '';
+
+    if (accessToken) {
+      // Best-effort access-token logout; if the access token is expired/invalid
+      // we fall through to the refresh path rather than failing the request.
+      try {
+        await authService.logout(accessToken);
+        return reply.code(200).send({ status: 'ok' });
+      } catch {
+        // fall through to refresh-token logout below
+      }
+    }
+
+    if (refreshToken) {
+      await authService.logoutByRefresh(refreshToken);
+      return reply.code(200).send({ status: 'ok' });
+    }
+
+    // Nothing usable supplied: require either a valid bearer token or a refreshToken.
+    throw new UnauthorizedError('A valid access token or refreshToken is required to log out');
   });
 
   // ---- Leads -----------------------------------------------------------------

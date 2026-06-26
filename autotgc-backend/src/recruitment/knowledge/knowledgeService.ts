@@ -231,4 +231,15 @@ export class KnowledgeService {
   async deactivate(id: string): Promise<KnowledgeEntry> {
     return this.prisma.knowledgeEntry.update({ where: { id }, data: { active: false } });
   }
+
+  /**
+   * Persist a freshly-computed embedding vector for an entry (semantic-retrieval
+   * cache). Stored as a `Json` number[]; reading code normalizes it defensively.
+   */
+  async setEmbedding(id: string, embedding: number[]): Promise<void> {
+    await this.prisma.knowledgeEntry.update({
+      where: { id },
+      data: { embedding: embedding as unknown as Prisma.InputJsonValue },
+    });
+  }
 }

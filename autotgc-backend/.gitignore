@@ -6,3 +6,20 @@ dist/
 *.log
 coverage/
 .DS_Store
+
+# One-off local command-output scratch files (build/test/migration logs).
+# These are developer scratch artifacts, never product source.
+cp-test.txt
+cp2.txt
+lp-full.txt
+lp-out.txt
+migdiff-err.txt
+npmi.txt
+pre-check.txt
+prisma-gen.txt
+pv.txt
+test-output.txt
+tsc-test-out.txt
+vt-baseline.txt
+tsc-out.txt
+build-out.txt

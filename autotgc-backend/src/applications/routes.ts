@@ -24,6 +24,7 @@ import type { JwtService } from '../auth/jwt';
 import type { Action } from '../auth/rbac';
 import type { OversightService } from '../oversight/oversightService';
 import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import { ApplicationService } from './applicationService';
 import type { CreateApplicationInput } from './applicationService';
 
@@ -32,6 +33,9 @@ export interface ApplicationRouteDeps {
   jwt: JwtService;
   /** Central oversight emit point; threaded into the service when present. */
   oversight?: OversightService;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 interface IdParams {
@@ -46,7 +50,7 @@ export async function registerApplicationRoutes(
   app: FastifyInstance,
   deps: ApplicationRouteDeps,
 ): Promise<void> {
-  const { prisma, jwt } = deps;
+  const { prisma, jwt, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const service = new ApplicationService(prisma, deps.oversight);
 
@@ -64,7 +68,7 @@ export async function registerApplicationRoutes(
         action,
         ownerUserId: candidate?.assignedTo ?? undefined,
       };
-    });
+    }, auditor);
 
   // ---- Program application cases --------------------------------------------
   app.post(

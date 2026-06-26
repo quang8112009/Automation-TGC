@@ -22,12 +22,16 @@ import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService, Role } from './jwt';
 import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import { ValidationError } from '../infra/errors';
 import { UserManagementService } from './userManagementService';
 
 export interface UserManagementRouteDeps {
   prisma: PrismaClient;
   jwt: JwtService;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 interface IdParams {
@@ -43,15 +47,15 @@ export function registerUserManagementRoutes(
   app: FastifyInstance,
   deps: UserManagementRouteDeps,
 ): void {
-  const { prisma, jwt } = deps;
+  const { prisma, jwt, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const service = new UserManagementService(prisma);
 
   // user_management is ADMIN-only under the pure RBAC policy: ADMIN passes every
   // action, SALES is denied the module (403). Static targets — no owner resolve.
-  const readGuard = rbacGuard(() => ({ module: 'user_management', action: 'read' }));
-  const createGuard = rbacGuard(() => ({ module: 'user_management', action: 'create' }));
-  const updateGuard = rbacGuard(() => ({ module: 'user_management', action: 'update' }));
+  const readGuard = rbacGuard(() => ({ module: 'user_management', action: 'read' }), auditor);
+  const createGuard = rbacGuard(() => ({ module: 'user_management', action: 'create' }), auditor);
+  const updateGuard = rbacGuard(() => ({ module: 'user_management', action: 'update' }), auditor);
 
   // GET /api/v1/users — list every account (username/email/role/locked). (Req 5.1)
   app.get(

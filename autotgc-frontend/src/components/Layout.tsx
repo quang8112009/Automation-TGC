@@ -28,6 +28,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Tổng quan',
     items: [
       { to: '/', label: 'Dashboard', icon: 'layout-dashboard' },
+      { to: '/assistant', label: 'Trợ lý hội thoại', icon: 'sparkles' },
       { to: '/reports', label: 'Báo cáo', icon: 'file-text' },
     ],
   },

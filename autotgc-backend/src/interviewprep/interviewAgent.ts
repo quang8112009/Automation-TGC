@@ -30,7 +30,7 @@ import type { ContentGenerator } from '../strategy/personaService';
 import type { KnowledgeService } from '../recruitment/knowledge/knowledgeService';
 import { hasCountryTemplate, normalizeCountry } from '../visa/visaCatalog';
 import { questionBankFor } from './interviewQuestionBank';
-import { ValidationError } from '../infra/errors';
+import { assertNoSecrets as assertNoSecretsShared } from '../infra/secretGuard';
 import { enforceAiGeneratedFlag } from '../infra/aiOptional';
 import { isRecord, asString } from '../platforms/narrow';
 import type { InterviewQuestion } from './types';
@@ -67,34 +67,16 @@ export interface ReviewAnswersResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Secret-like value patterns. These mirror the spirit of the repo's
- * `scripts/secret-scan.js`: private-key headers, common provider API-key
- * prefixes/tokens, and explicit `apiKey=`/`secret=` assignments. The guard is
- * intentionally conservative — it errs toward failing a suspicious prompt
- * rather than silently leaking a secret (Req 10.6).
- */
-const SECRET_PATTERNS: readonly RegExp[] = [
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /\bAIza[0-9A-Za-z_-]{20,}\b/, // Google API key shape
-  /\bsk-[A-Za-z0-9]{16,}\b/, // OpenAI-style secret key
-  /\b(?:api[_-]?key|secret|access[_-]?token|bearer)\b\s*[:=]\s*['"]?[A-Za-z0-9._-]{12,}/i,
-];
-
-/**
- * Throw a 400 `ValidationError` if `text` contains a secret-like value. Pure
- * and deterministic. Called on every prompt BEFORE it reaches Gemini so a
- * secret is never transmitted, and so the request fails loudly rather than the
- * value being silently dropped (Req 10.5, 10.6).
+ * Throw a 400 `ValidationError` if `text` contains a secret-like value. Thin
+ * wrapper over the shared {@link assertNoSecretsShared} secret-guard, kept and
+ * re-exported here for backward compatibility with existing imports and to
+ * surface the interview-specific `INTERVIEW_PROMPT_SECRET_DETECTED` code.
+ * Called on every prompt BEFORE it reaches Gemini so a secret is never
+ * transmitted, and so the request fails loudly rather than the value being
+ * silently dropped (Req 10.5, 10.6).
  */
 export function assertNoSecrets(text: string): void {
-  for (const re of SECRET_PATTERNS) {
-    if (re.test(text)) {
-      throw new ValidationError(
-        'Refusing to send a prompt that appears to contain a secret value',
-        'INTERVIEW_PROMPT_SECRET_DETECTED',
-      );
-    }
-  }
+  assertNoSecretsShared(text, 'INTERVIEW_PROMPT_SECRET_DETECTED');
 }
 
 /** Normalize for comparison/grounding: trimmed. */

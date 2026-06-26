@@ -22,6 +22,7 @@
 import type { ContentGenerator } from '../strategy/personaService';
 import type { EssayContext, EssayDocType } from './types';
 import { enforceAiGeneratedFlag } from '../infra/aiOptional';
+import { assertNoSecrets } from '../infra/secretGuard';
 
 /** Explicit generation mode chosen by the caller (Req 6.7). */
 export type EssayGenMode = 'AI' | 'STRUCTURED';
@@ -167,7 +168,7 @@ export function buildEssayPrompt(ctx: EssayContext, docType: EssayDocType): stri
   if (country) facts.push(`quốc gia: ${country}`);
   if (field) facts.push(`lĩnh vực: ${field}`);
 
-  return [
+  const prompt = [
     `Bạn là chuyên viên tư vấn du học. Hãy soạn một bản nháp ${label} bằng tiếng Việt.`,
     facts.length > 0
       ? `Chỉ dựa trên các thông tin sau, không bịa thêm số liệu: ${facts.join('; ')}.`
@@ -176,6 +177,8 @@ export function buildEssayPrompt(ctx: EssayContext, docType: EssayDocType): stri
       ? 'Trình bày dưới dạng CV có cấu trúc rõ ràng theo từng mục.'
       : 'Trình bày dưới dạng văn xuôi có cấu trúc: mở bài, động lực/mục tiêu, nền tảng, lý do chọn chương trình, kết luận.',
   ].join('\n');
+  assertNoSecrets(prompt, 'ESSAY_PROMPT_SECRET_DETECTED');
+  return prompt;
 }
 
 /**

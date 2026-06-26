@@ -81,7 +81,20 @@ async function parseError(res: Response): Promise<ApiError> {
   return new ApiError(res.status, code, message);
 }
 
-async function tryRefresh(): Promise<boolean> {
+/**
+ * In-flight refresh guard (anti "refresh storm").
+ *
+ * When several requests 401 at the same time (e.g. a dashboard firing many
+ * queries in parallel after the access token expired), each one would otherwise
+ * POST /api/auth/refresh independently. That hammers the endpoint and, worse,
+ * one refresh rotating/invalidating the token can race the others and cascade
+ * into a spurious logout. We instead share ONE refresh promise: the first caller
+ * starts it, everyone else awaits the same result, and the slot is cleared once
+ * it settles so a later (genuinely new) 401 can refresh again.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function performRefresh(): Promise<boolean> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
   try {
@@ -98,6 +111,16 @@ async function tryRefresh(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function tryRefresh(): Promise<boolean> {
+  // Coalesce concurrent refreshes onto a single in-flight request.
+  if (!refreshInFlight) {
+    refreshInFlight = performRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
 }
 
 async function rawRequest(path: string, options: RequestOptions): Promise<Response> {

@@ -30,6 +30,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../../auth/jwt';
 import { requireAuth, rbacGuard, getAuth } from '../../http/authMiddleware';
+import type { RbacAuditor } from '../../http/authMiddleware';
 import type { Action } from '../../auth/rbac';
 import type { OversightService } from '../../oversight/oversightService';
 import { DocumentChecklistService } from './documentChecklistService';
@@ -43,6 +44,9 @@ export interface DocumentRouteDeps {
   /** Central oversight emit point; when present, a document verified
    * (VERIFIED) transition fans out one ActivityLog + N notifications. */
   oversight?: OversightService;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 interface IdParams {
@@ -74,7 +78,7 @@ export async function registerDocumentRoutes(
   app: FastifyInstance,
   deps: DocumentRouteDeps,
 ): Promise<void> {
-  const { prisma, jwt } = deps;
+  const { prisma, jwt, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const checklistService = new DocumentChecklistService(prisma, deps.oversight);
   const catalogService = new DocumentCatalogService(prisma);
@@ -96,7 +100,7 @@ export async function registerDocumentRoutes(
         action,
         ownerUserId: candidate?.assignedTo ?? undefined,
       };
-    });
+    }, auditor);
 
   // For the item-scoped status route, resolve the owning candidate's assignedTo
   // from the checklist item so the same assigned-only policy applies.
@@ -112,15 +116,15 @@ export async function registerDocumentRoutes(
         action,
         ownerUserId: item?.candidate?.assignedTo ?? undefined,
       };
-    });
+    }, auditor);
 
   // Catalog routes are gated by the fine-grained `document_catalog` module so
   // SALES can manage the per-market default doc set (Req 1.4, 1.5) without
   // gaining the broader `settings` surface (partners-write, privacy/GDPR). GET
   // maps to document_catalog/read and PUT to document_catalog/update; ADMIN
   // keeps full access via the pure RBAC policy.
-  const catalogReadGuard = rbacGuard(() => ({ module: 'document_catalog', action: 'read' }));
-  const catalogUpdateGuard = rbacGuard(() => ({ module: 'document_catalog', action: 'update' }));
+  const catalogReadGuard = rbacGuard(() => ({ module: 'document_catalog', action: 'read' }), auditor);
+  const catalogUpdateGuard = rbacGuard(() => ({ module: 'document_catalog', action: 'update' }), auditor);
 
   // ---- Candidate document checklist -----------------------------------------
   // GET /api/v1/candidates/:id/documents — list items + completion metric.

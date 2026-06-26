@@ -26,6 +26,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../auth/jwt';
 import type { EventBus } from '../infra/events';
 import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import { ActivityLogger } from './activityLogger';
 import { NotificationService } from './notificationService';
 
@@ -34,6 +35,9 @@ export interface OversightRouteDeps {
   jwt: JwtService;
   /** Shared domain event bus; when present, notification creation publishes. */
   eventBus?: EventBus;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 interface IdParams {
@@ -50,15 +54,15 @@ export async function registerOversightRoutes(
   app: FastifyInstance,
   deps: OversightRouteDeps,
 ): Promise<void> {
-  const { prisma, jwt, eventBus } = deps;
+  const { prisma, jwt, eventBus, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const notifications = new NotificationService(prisma, eventBus);
   const activityLogger = new ActivityLogger(prisma);
 
   // Both roles may read their OWN notifications -> dashboard/read.
-  const selfReadGuard = rbacGuard(() => ({ module: 'dashboard', action: 'read' }));
+  const selfReadGuard = rbacGuard(() => ({ module: 'dashboard', action: 'read' }), auditor);
   // Company-wide activity ledger is ADMIN-only -> dashboard/company_stats.
-  const activityGuard = rbacGuard(() => ({ module: 'dashboard', action: 'company_stats' }));
+  const activityGuard = rbacGuard(() => ({ module: 'dashboard', action: 'company_stats' }), auditor);
 
   // ---- Notifications --------------------------------------------------------
   // GET /api/v1/notifications — caller's notifications, newest first (Req 9.1).

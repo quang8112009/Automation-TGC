@@ -13,6 +13,7 @@
 import type { ContentGenerator } from '../strategy/personaService';
 import { checklistFor, withDeadlines, normalizeCountry } from './visaCatalog';
 import { suggestLogistics } from './logisticsPlanner';
+import { assertNoSecrets } from '../infra/secretGuard';
 
 export interface VisaAdviceInput {
   country: string;
@@ -68,7 +69,7 @@ export function buildDeterministicAdvice(input: VisaAdviceInput): Omit<VisaAdvic
 
 /** Pure grounding prompt for Gemini phrasing (no secrets, fully grounded). */
 export function buildAdvicePrompt(base: Omit<VisaAdvice, 'aiGenerated'>, country: string): string {
-  return [
+  const prompt = [
     'Bạn là chuyên viên tư vấn du học / xuất khẩu lao động.',
     `Hãy viết lại phần tư vấn visa & hậu cần cho ${country} bằng tiếng Việt, ngắn gọn, ` +
       'rõ ràng, động viên ứng viên. CHỈ dựa trên thông tin dưới đây, KHÔNG bịa thêm số liệu/chi phí.',
@@ -76,6 +77,8 @@ export function buildAdvicePrompt(base: Omit<VisaAdvice, 'aiGenerated'>, country
     'Dữ liệu nền:',
     base.advisory,
   ].join('\n');
+  assertNoSecrets(prompt, 'VISA_PROMPT_SECRET_DETECTED');
+  return prompt;
 }
 
 export class VisaAdvisor {

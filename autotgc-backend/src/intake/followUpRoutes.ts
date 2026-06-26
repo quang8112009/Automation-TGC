@@ -15,6 +15,7 @@ import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../auth/jwt';
 import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import { FollowUpService } from './followUpService';
 import type { ChannelSender } from './intakeService';
 
@@ -23,6 +24,9 @@ export interface FollowUpRouteDeps {
   jwt: JwtService;
   /** Outbound transport; defaults to no-op when no messaging tokens are wired. */
   sender?: ChannelSender;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 function asString(v: unknown): string | undefined {
@@ -35,12 +39,12 @@ function asInt(v: unknown, fallback: number): number {
 }
 
 export async function registerFollowUpRoutes(app: FastifyInstance, deps: FollowUpRouteDeps): Promise<void> {
-  const { prisma, jwt } = deps;
+  const { prisma, jwt, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const service = new FollowUpService(prisma, deps.sender);
 
-  const readGuard = rbacGuard(() => ({ module: 'lead_management', action: 'read' }));
-  const writeGuard = rbacGuard(() => ({ module: 'lead_management', action: 'update' }));
+  const readGuard = rbacGuard(() => ({ module: 'lead_management', action: 'read' }), auditor);
+  const writeGuard = rbacGuard(() => ({ module: 'lead_management', action: 'update' }), auditor);
 
   app.get(
     '/api/v1/follow-ups',

@@ -31,6 +31,17 @@ export const AUTH_RATE_LIMIT: RateLimitConfig = {
   timeWindow: '1 minute',
 };
 
+/**
+ * Stricter limit for cost-heavy AI assistant endpoints (ask / ask-stream /
+ * knowledge-reindex). Each request can trigger embedding + multi-round LLM
+ * calls, so cap per-IP throughput to blunt cost-DoS while staying generous for
+ * normal interactive use. Applied per-route via `config: { rateLimit: ... }`.
+ */
+export const ASSISTANT_RATE_LIMIT: RateLimitConfig = {
+  max: 20,
+  timeWindow: '1 minute',
+};
+
 /** Default global ceiling applied to every route unless overridden per-route. */
 export const GLOBAL_RATE_LIMIT: RateLimitConfig = {
   max: 300,

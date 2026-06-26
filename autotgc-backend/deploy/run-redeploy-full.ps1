@@ -39,6 +39,13 @@ try {
   Section 'EXTRACT BACKEND SOURCE'
   Run 'rm -rf /opt/autotgc-src/* ; mkdir -p /opt/autotgc-src ; tar -xzf /tmp/autotgc.tar.gz -C /opt/autotgc-src --strip-components=1 ; echo "--- src top ---" ; ls /opt/autotgc-src ; echo "--- deploy dir ---" ; ls /opt/autotgc-src/deploy | head'
 
+  # When the tarball is built from a Windows checkout the *.sh scripts may carry
+  # CRLF line endings, which makes bash choke on the very first line
+  # (`set -euo pipefail` -> "invalid option name" because of the trailing \r).
+  # Normalize to LF before executing anything so the deploy is checkout-agnostic.
+  Section 'NORMALIZE DEPLOY SCRIPT LINE ENDINGS (CRLF -> LF)'
+  Run "sed -i 's/\r`$//' /opt/autotgc-src/deploy/*.sh && echo NORMALIZED_OK"
+
   Section 'RUN redeploy2.sh (nohup + poll)'
   Run 'rm -f /tmp/redeploy.log ; nohup bash /opt/autotgc-src/deploy/redeploy2.sh > /tmp/redeploy.log 2>&1 & echo "LAUNCHED_PID=$!"'
   $deadline = (Get-Date).AddMinutes(25)

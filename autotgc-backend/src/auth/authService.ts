@@ -207,4 +207,26 @@ export class AuthService {
       data: { status: 'REVOKED', revokedAt: new Date() },
     });
   }
+
+  /**
+   * Logout via the REFRESH token. The access-token logout above only works while
+   * the access token is still valid (TTL ~24h); once it expires the client can
+   * no longer revoke its session through `logout`, yet the refresh token stays
+   * usable for the full refresh TTL (~30d) and keeps minting new access tokens.
+   * Accepting the refresh token here closes that window — a client can terminate
+   * its session at any time, even after the access token has expired.
+   */
+  async logoutByRefresh(refreshToken: string): Promise<void> {
+    let claims;
+    try {
+      claims = await this.jwt.verify(refreshToken, 'refresh');
+    } catch {
+      throw new UnauthorizedError('Invalid refresh token');
+    }
+
+    await this.prisma.jwtSession.updateMany({
+      where: { sessionId: claims.sid, status: 'ACTIVE' },
+      data: { status: 'REVOKED', revokedAt: new Date() },
+    });
+  }
 }

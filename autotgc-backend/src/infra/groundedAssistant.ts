@@ -40,6 +40,12 @@ export interface AssistantRequest {
   groundingContext: string;
   /** The user's question/instruction. */
   userMessage: string;
+  /**
+   * Optional prior conversation turns (already bounded by the caller), inserted
+   * between the grounding context and the current user message so the assistant
+   * carries multi-turn memory. Omit for a single-shot question.
+   */
+  history?: readonly ChatMessage[];
 }
 
 /** Result of an assistant run — always carries the AI-OPTIONAL flag. */
@@ -89,6 +95,7 @@ export class GroundedAssistant {
     const messages: ChatMessage[] = [
       { role: 'system', content: request.systemPrompt },
       { role: 'system', content: `[GroundedContext]\n${request.groundingContext}` },
+      ...(request.history ?? []),
       { role: 'user', content: request.userMessage },
     ];
 

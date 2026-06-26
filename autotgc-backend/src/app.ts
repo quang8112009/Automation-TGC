@@ -30,6 +30,7 @@ import { registerRecruitmentRoutes } from './recruitment/routes';
 import { registerReportingRoutes } from './reporting/routes';
 import { registerDocumentRoutes } from './recruitment/documents/routes';
 import { registerOversightRoutes } from './oversight/routes';
+import { registerGlobalAuthGate } from './http/authMiddleware';
 import { registerUserManagementRoutes } from './auth/userRoutes';
 import { ActivityLogger } from './oversight/activityLogger';
 import { AuthorizationAuditor } from './oversight/authorizationAuditor';
@@ -103,6 +104,15 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   // Readiness probe (DB + Redis).
   registerReadiness(app, { redisUrl: config.redisUrl });
 
+  // GLOBAL AUTH GATE (deny-by-default). A single onRequest hook authenticates
+  // every request that is NOT in the public allow-list (PUBLIC_PATHS: health,
+  // readiness, docs, auth endpoints, HMAC webhooks, query-token realtime, the
+  // public API manifest). This guarantees no route can be accidentally exposed
+  // by forgetting its per-route `requireAuth`; the per-route guards remain for
+  // explicit clarity and to resolve fine-grained RBAC targets, and are
+  // idempotent because this hook already set `request.auth`.
+  registerGlobalAuthGate(app, { prisma: deps.prisma, jwt: deps.jwt });
+
   // Global error handler: AppError carries its own allowed status; anything else -> 500.
   app.setErrorHandler((err, _request, reply) => {
     const anyErr = err as { statusCode?: number; code?: string; name?: string };
@@ -137,7 +147,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
     reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
   });
 
-  const { registry, tokenManager, alerts, gemini, mediaService, eventBus, aiTelemetry, assistantCompleter, mediaRenderProvider } =
+  const { registry, tokenManager, alerts, gemini, mediaService, eventBus, aiTelemetry, assistantCompleter, assistantStreamer, assistantEmbedder, mediaRenderProvider } =
     deps.services;
 
   // Single shared oversight emit point (design §5, Req 10.4): every supervised
@@ -235,7 +245,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   // Candidate document checklist + document-type catalog (Req 13.6, 15.5). All
   // routes mount behind requireAuth + rbacGuard inside the registrar; SALES is
   // assigned-only on candidate-scoped routes and denied on the ADMIN catalog.
-  await registerDocumentRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, oversight });
+  await registerDocumentRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, oversight, auditor: authzAuditor });
 
   // Oversight: persistent notifications + append-only activity feed
   // (/api/v1/notifications*, /api/v1/activity). All routes mount behind
@@ -243,19 +253,19 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   // ADMIN-only (dashboard/company_stats) while notification reads are self-
   // scoped (dashboard/read). The shared eventBus is threaded so notification
   // creation publishes one realtime `notification` frame.
-  await registerOversightRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, eventBus });
+  await registerOversightRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, eventBus, auditor: authzAuditor });
 
   // Staff account management (ADMIN-only): list / create SALES / lock / unlock /
   // change role / reset password (/api/v1/users*). All routes mount behind
   // requireAuth + rbacGuard({ module: 'user_management' }) inside the registrar,
   // so SALES is denied 403 outright.
-  registerUserManagementRoutes(app, { prisma: deps.prisma, jwt: deps.jwt });
+  registerUserManagementRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, auditor: authzAuditor });
 
   // Privacy & consent (ADMIN-only, settings module): append-only consent ledger
   // (incl. CROSS_BORDER_AI transfer consent) + right-to-erasure for a data
   // subject (lead / candidate / intake). Closes GDPR-style gaps surfaced in a
   // security review.
-  registerPrivacyRoutes(app, { prisma: deps.prisma, jwt: deps.jwt });
+  registerPrivacyRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, auditor: authzAuditor });
 
   // AI marketing autopilot:
   //  - trend research + per-market content planning (/api/v1/trends, /content-plans)
@@ -295,7 +305,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
 
   // Partners (đối tác đã hợp tác) + destination programs (nơi đưa đi XKLĐ +
   // điều kiện). ADMIN manages (settings/update); SALES reads (lead_management/read).
-  await registerPartnerRoutes(app, { prisma: deps.prisma, jwt: deps.jwt });
+  await registerPartnerRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, auditor: authzAuditor });
 
   // Omni-channel conversational intake (Facebook Messenger + Zalo OA chatbot):
   // public HMAC-verified webhooks drive the dossier-collection flow, land a Lead
@@ -309,18 +319,19 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
     config,
     eventBus,
     sender: channelSender,
+    auditor: authzAuditor,
   });
 
   // Visa Smart Checklist + logistics plan + destination suggestions (đối chiếu
   // DB & gợi ý cho tư vấn). All behind requireAuth + rbacGuard(lead_management).
-  await registerVisaRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini });
+  await registerVisaRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini, auditor: authzAuditor });
 
   // Study-abroad enhancements:
   //  - Scholarship & financial matching (ngân sách + GPA + IELTS → học bổng/chi
   //    phí ròng → gợi ý cho tư vấn).
   //  - Behavior-based follow-up nurture (drop-off → tin nhắn cá nhân hóa qua kênh).
-  await registerScholarshipRoutes(app, { prisma: deps.prisma, jwt: deps.jwt });
-  await registerFollowUpRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, sender: channelSender });
+  await registerScholarshipRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, auditor: authzAuditor });
+  await registerFollowUpRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, sender: channelSender, auditor: authzAuditor });
 
   // Study-abroad AI advisor suite (additive, all behind requireAuth + rbacGuard;
   // SALES assigned-only via candidate.assignedTo, Gemini-optional with
@@ -330,11 +341,11 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   //  - Interview prep: grounded visa-interview question sets + answer scoring.
   //  - Applications: multi-application cases + merged proactive deadline timeline.
   //  - Roadmap: study→career→PR ROI estimate + readiness scoring + REVIEW MODE narrative.
-  await registerAdmissionsRoutes(app, { prisma: deps.prisma, jwt: deps.jwt });
-  await registerEssayRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini });
-  await registerInterviewPrepRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini });
-  await registerApplicationRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, oversight });
-  await registerRoadmapRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini });
+  await registerAdmissionsRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, auditor: authzAuditor });
+  await registerEssayRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini, auditor: authzAuditor });
+  await registerInterviewPrepRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini, auditor: authzAuditor });
+  await registerApplicationRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, oversight, auditor: authzAuditor });
+  await registerRoadmapRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, gemini, auditor: authzAuditor });
 
   // AgentOps: ADMIN-only read of the AI-text-call telemetry window (fallback
   // rate, latency percentiles, error-code breakdown) — observability for the
@@ -344,7 +355,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   // Grounded assistant with tools (reusable use-case): ADMIN+SALES grounded Q&A
   // over the KnowledgeBase, AI-OPTIONAL with a deterministic fallback, governed
   // tool use via the allow-list. Completer is undefined when AI is unconfigured.
-  await registerAssistantRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, completer: assistantCompleter });
+  await registerAssistantRoutes(app, { prisma: deps.prisma, jwt: deps.jwt, completer: assistantCompleter, streamer: assistantStreamer, embedder: assistantEmbedder });
 
   return app;
 }

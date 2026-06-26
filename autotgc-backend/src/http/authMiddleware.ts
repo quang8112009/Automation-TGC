@@ -4,7 +4,7 @@
  * - requireRole: coarse role gate.
  * - rbacGuard: fine-grained policy via authorize() with a per-request ResourceTarget builder.
  */
-import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService, Role } from '../auth/jwt';
 import { authorize } from '../auth/rbac';
@@ -40,6 +40,11 @@ export const PUBLIC_PATHS: readonly string[] = [
   '/api/auth/register',
   '/api/auth/login',
   '/api/auth/refresh',
+  // Logout authenticates itself: it accepts a valid access token OR a refresh
+  // token in the body, so it must bypass the global gate (a client whose access
+  // token has expired must still be able to revoke its session via the refresh
+  // token). The handler verifies whichever token is supplied.
+  '/api/auth/logout',
   '/api/leads/webhook/facebook',
   '/api/leads/webhook/website',
   // Omni-channel chatbot intake webhooks (Facebook Messenger + Zalo OA). They
@@ -155,4 +160,63 @@ export function rbacGuard(build: TargetBuilder, auditor?: RbacAuditor): preHandl
       throw new ForbiddenError();
     }
   };
+}
+
+/**
+ * Decide whether a request URL is in the public allow-list (no global auth).
+ *
+ * Pure & exported for property/unit testing. Matching rules:
+ *  - The query string is stripped first (`/docs?foo=1` → `/docs`).
+ *  - `/docs` matches itself AND any sub-path (`/docs`, `/docs/`, `/docs/json`,
+ *    `/docs/static/...`) because @fastify/swagger-ui serves its assets under
+ *    that prefix.
+ *  - Every other allow-listed path matches EXACTLY (a trailing-slash variant is
+ *    also accepted), so a public prefix can never accidentally expose a
+ *    protected sibling route.
+ */
+export function isPublicPath(rawUrl: string, publicPaths: readonly string[] = PUBLIC_PATHS): boolean {
+  const path = (rawUrl.split('?')[0] ?? rawUrl).replace(/\/+$/, '') || '/';
+  for (const p of publicPaths) {
+    const normalized = p.replace(/\/+$/, '') || '/';
+    if (path === normalized) return true;
+    // Prefix-match ONLY for the docs UI, whose assets live under /docs/*.
+    if (normalized === '/docs' && path.startsWith('/docs/')) return true;
+  }
+  return false;
+}
+
+/**
+ * Register a SINGLE global authentication gate (deny-by-default).
+ *
+ * Historically each route registrar had to remember to attach `requireAuth` /
+ * `rbacGuard`; a single omission silently exposed a route. This `onRequest` hook
+ * closes that gap: every request that is NOT in {@link PUBLIC_PATHS} must carry a
+ * valid access token tied to an ACTIVE session, or it is rejected with 401
+ * before reaching any handler.
+ *
+ * It runs in the `onRequest` phase (before body parsing) and sets `request.auth`
+ * so per-route `requireAuth` (which remains for explicit clarity) is idempotent,
+ * and `rbacGuard` builders can read the principal. Public routes that do their
+ * own auth (webhooks via HMAC, realtime via query-token) stay in the allow-list.
+ */
+export function registerGlobalAuthGate(app: FastifyInstance, deps: AuthDeps): void {
+  app.addHook('onRequest', async (request: FastifyRequest): Promise<void> => {
+    if (isPublicPath(request.url)) return;
+    // Inline the same checks as requireAuth so token + session verification stays
+    // in one place (the onRequest signature differs from a preHandler).
+    const token = extractBearer(request.headers.authorization);
+    let claims;
+    try {
+      claims = await deps.jwt.verify(token, 'access');
+    } catch {
+      throw new UnauthorizedError('Invalid or expired token');
+    }
+    const session = await deps.prisma.jwtSession.findUnique({
+      where: { sessionId: claims.sid },
+    });
+    if (!session || session.status !== 'ACTIVE' || session.revokedAt !== null) {
+      throw new UnauthorizedError('Session is not active');
+    }
+    request.auth = { userId: claims.sub, role: claims.role, sessionId: claims.sid };
+  });
 }

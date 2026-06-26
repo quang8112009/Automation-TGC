@@ -23,6 +23,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../auth/jwt';
 import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import type { Action } from '../auth/rbac';
 import { AdmissionService } from './admissionService';
 import type { AcademicInput } from './admissionService';
@@ -30,6 +31,9 @@ import type { AcademicInput } from './admissionService';
 export interface AdmissionsRouteDeps {
   prisma: PrismaClient;
   jwt: JwtService;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 interface IdParams {
@@ -57,7 +61,7 @@ export async function registerAdmissionsRoutes(
   app: FastifyInstance,
   deps: AdmissionsRouteDeps,
 ): Promise<void> {
-  const { prisma, jwt } = deps;
+  const { prisma, jwt, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const service = new AdmissionService(prisma);
 
@@ -75,7 +79,7 @@ export async function registerAdmissionsRoutes(
         action,
         ownerUserId: candidate?.assignedTo ?? undefined,
       };
-    });
+    }, auditor);
 
   // ---- Academic profile (1–1 with the candidate) ----------------------------
   app.put(

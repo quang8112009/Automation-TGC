@@ -18,12 +18,16 @@ import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../auth/jwt';
 import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import { ScholarshipService } from './scholarshipService';
 import type { FinanceOverride } from './scholarshipService';
 
 export interface ScholarshipRouteDeps {
   prisma: PrismaClient;
   jwt: JwtService;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 interface IdParams {
@@ -59,13 +63,13 @@ export async function registerScholarshipRoutes(
   app: FastifyInstance,
   deps: ScholarshipRouteDeps,
 ): Promise<void> {
-  const { prisma, jwt } = deps;
+  const { prisma, jwt, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const scholarshipService = new ScholarshipService(prisma);
 
   // Reads map to lead_management/read so SALES can read. The candidate-scoped
   // route re-checks assigned ownership inside the service.
-  const readGuard = rbacGuard(() => ({ module: 'lead_management', action: 'read' }));
+  const readGuard = rbacGuard(() => ({ module: 'lead_management', action: 'read' }), auditor);
 
   // ---- Candidate scholarship suggestions ------------------------------------
   app.get(

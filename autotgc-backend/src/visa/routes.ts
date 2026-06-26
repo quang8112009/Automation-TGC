@@ -10,6 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../auth/jwt';
 import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
+import type { RbacAuditor } from '../http/authMiddleware';
 import type { Action } from '../auth/rbac';
 import type { ContentGenerator } from '../strategy/personaService';
 import { VisaService } from './visaService';
@@ -21,6 +22,9 @@ export interface VisaRouteDeps {
   jwt: JwtService;
   /** Optional Gemini seam; the visa advisor grounds + phrases advice when present. */
   gemini?: ContentGenerator;
+  /** Optional best-effort sink for denied authorization decisions (Req 7.2,
+   * 7.3); threaded into every rbacGuard so each 403 appends one AUTHZ_DENIED. */
+  auditor?: RbacAuditor;
 }
 
 interface IdParams {
@@ -37,13 +41,14 @@ function asInt(v: unknown, fallback: number): number {
 }
 
 export async function registerVisaRoutes(app: FastifyInstance, deps: VisaRouteDeps): Promise<void> {
-  const { prisma, jwt } = deps;
+  const { prisma, jwt, auditor } = deps;
   const auth = requireAuth({ prisma, jwt });
   const visa = new VisaService(prisma);
   const suggestions = new DestinationSuggestionService(prisma);
   const advisor = new VisaAdvisor(deps.gemini);
 
-  const guard = (action: Action) => rbacGuard(() => ({ module: 'lead_management', action }));
+  const guard = (action: Action) =>
+    rbacGuard(() => ({ module: 'lead_management', action }), auditor);
 
   // ---- Destination suggestions (gợi ý cho tư vấn) ---------------------------
   app.get(
