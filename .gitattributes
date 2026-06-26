@@ -1,0 +1,8 @@
+# Shell scripts MUST use LF line endings.
+#
+# Rationale: these scripts run under bash on the Linux deploy host. A deploy once
+# failed at `set -euo pipefail` because `git archive` had exported the file with
+# CRLF (the trailing \r turned `pipefail` into an invalid option). Forcing eol=lf
+# guarantees `git archive`/checkout produce LF regardless of the committer's OS
+# (autocrlf). Scoped to *.sh only to avoid renormalizing unrelated files.
+*.sh text eol=lf
