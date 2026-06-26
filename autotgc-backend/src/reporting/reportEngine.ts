@@ -31,7 +31,7 @@ const UNKNOWN_SOURCE = 'UNKNOWN';
 const UNKNOWN_STAGE = 'UNKNOWN';
 const FALLBACK_MARKET = 'OTHER';
 
-const INSUFFICIENT: 'INSUFFICIENT_DATA' = 'INSUFFICIENT_DATA';
+const INSUFFICIENT = 'INSUFFICIENT_DATA' as const;
 
 /** Normalize a possibly blank string to a stable, non-empty key. */
 function nonBlank(value: string | null | undefined, fallback: string): string {

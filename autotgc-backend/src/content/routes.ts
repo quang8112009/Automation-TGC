@@ -11,7 +11,7 @@
  * This file does NOT touch routes/index.ts; it exports a registrar that the
  * application can call additively.
  */
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { AppConfig } from '../infra/config';
 import type { JwtService } from '../auth/jwt';

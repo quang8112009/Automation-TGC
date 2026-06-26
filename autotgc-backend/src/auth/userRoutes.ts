@@ -21,7 +21,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService, Role } from './jwt';
-import { requireAuth, rbacGuard, getAuth } from '../http/authMiddleware';
+import { requireAuth, rbacGuard } from '../http/authMiddleware';
 import type { RbacAuditor } from '../http/authMiddleware';
 import { ValidationError } from '../infra/errors';
 import { UserManagementService } from './userManagementService';
