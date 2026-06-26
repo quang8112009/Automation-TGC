@@ -8,8 +8,9 @@
 - ✅ **P0 #2 — Backup DB tự động:** cài `deploy/backup-db.sh` + cron daily 02:30 trên server; chạy backup thử (gzip OK) + **diễn tập restore vào DB tạm thành công** (58 bảng / 30 user / 0 lỗi). Còn thiếu: off-site (set `BACKUP_OFFSITE_DIR`).
 - ✅ **P1 #6 — CRLF deploy bug:** thêm `.gitattributes` (`*.sh` = LF); verify `git archive` ra LF-only.
 - ✅ **P1 #6 — Lint/CI:** cài eslint + @typescript-eslint, config `.eslintrc.json`, sửa 1 error + 2 dead import, bật lint job trong CI (lint exit 0, build sạch, 945 test pass).
+- 🟡 **P1 #9 — Security headers (một phần):** thêm header bảo mật cho SPA tĩnh trong `deploy/panel-vhost.conf` (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `X-XSS-Protection`, HSTS có điều kiện) — vá khoảng trống mà helmet không phủ (index.html + /assets/ phục vụ trực tiếp bởi nginx). Còn lại: chuẩn hoá redirect HTTP→HTTPS + gỡ vhost `:8088` trùng khỏi sites-enabled (cần thao tác trên server).
 
-Còn lại (xem bảng bên dưới): P0 #1/#3/#4/#5 + P1 #7/#8/#9/#10.
+Còn lại (xem bảng bên dưới): P0 #1/#3/#4/#5 + P1 #7/#8/#9 (phần còn lại)/#10.
 
 
 ## Kết luận
