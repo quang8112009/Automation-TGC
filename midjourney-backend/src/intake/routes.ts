@@ -23,6 +23,12 @@ import { verifySignature } from '../infra/hmac';
 import { recordWebhookDelivery } from '../infra/webhookReplay';
 import { IntakeService, NOOP_SENDER } from './intakeService';
 import { governanceRoute } from '../governance/middleware';
+import {
+  maskIntakeResponse,
+  maskIntakeArrayResponse,
+  resolveAccessLevel,
+} from '../governance/responseMasking';
+import { getAuth } from '../http/authMiddleware';
 import type { ChannelSender, IntakeChannelValue, InboundMessage } from './intakeService';
 import { INTAKE_PUBLIC_PATHS } from './publicPaths';
 
@@ -196,7 +202,16 @@ export async function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRou
       const q = (request.query ?? {}) as Record<string, unknown>;
       const page = Number(q.page) > 0 ? Number(q.page) : 1;
       const limit = Number(q.limit) > 0 ? Number(q.limit) : 20;
-      const result = await service.list(asString(q.status), page, limit);
+      const result = (await service.list(asString(q.status), page, limit)) as Record<string, unknown>;
+      // Apply PII masking to conversation list.
+      const level = resolveAccessLevel(getAuth(request).role);
+      const items = result.items;
+      if (items && Array.isArray(items)) {
+        return reply.code(200).send({
+          ...result,
+          items: maskIntakeArrayResponse(items as Record<string, unknown>[], level),
+        });
+      }
       return reply.code(200).send(result);
     },
   );
@@ -207,7 +222,9 @@ export async function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRou
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const convo = await service.getConversation(id);
-      return reply.code(200).send(convo ?? {});
+      if (!convo) return reply.code(200).send({});
+      const level = resolveAccessLevel(getAuth(request).role);
+      return reply.code(200).send(maskIntakeResponse(convo as Record<string, unknown>, level));
     },
   );
 
