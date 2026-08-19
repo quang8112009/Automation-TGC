@@ -118,6 +118,144 @@ export const POLL_MAX_INTERVAL_MS = 16_000;
 /** Maximum number of polls before timeout. */
 export const POLL_MAX_ATTEMPTS = 60;
 
+// ── Cost estimation ────────────────────────────────────────────────────────
+
+/**
+ * Per-image cost table sourced from Replicate pricing (August 2025).
+ * Prices are in USD per single output image.
+ *
+ * Source: https://replicate.com/pricing
+ *   - FLUX.1 schnell:  $3.00 / 1000 images = $0.003 / image
+ *   - FLUX.1 dev:      $0.025 / image
+ *   - FLUX.11.1-pro:   $0.040 / image
+ *   - SD3:             billed by hardware time (estimated from L40S GPU)
+ *
+ * Hardware time estimates (L40S @ $3.51/hr = $0.000975/sec):
+ *   - schnell: ~1.5s (1-4 steps)
+ *   - dev:     ~8s  (20 steps)
+ *   - pro:     ~12s (28 steps)
+ *   - SD3:     ~6s  (28 steps)
+ */
+export interface ModelCostConfig {
+  /** Per-image base cost in USD (billed per output, not by time). */
+  costPerImageUSD: number;
+  /** Estimated GPU seconds for a standard 1024×1024 render. */
+  estimatedGpuSeconds: number;
+  /** GPU hardware cost per second in USD. */
+  gpuCostPerSecondUSD: number;
+  /** Pricing model: 'per_image' (FLUX.1) or 'per_second' (SD3). */
+  pricingModel: 'per_image' | 'per_second';
+}
+
+/** Known model cost configurations (USD). */
+export const MODEL_COSTS: Readonly<Record<string, ModelCostConfig>> = {
+  'black-forest-labs/flux-schnell': {
+    costPerImageUSD: 0.003,
+    estimatedGpuSeconds: 1.5,
+    gpuCostPerSecondUSD: 0.000975,
+    pricingModel: 'per_image',
+  },
+  'black-forest-labs/flux-dev': {
+    costPerImageUSD: 0.025,
+    estimatedGpuSeconds: 8,
+    gpuCostPerSecondUSD: 0.000975,
+    pricingModel: 'per_image',
+  },
+  'black-forest-labs/flux-1.1-pro': {
+    costPerImageUSD: 0.04,
+    estimatedGpuSeconds: 12,
+    gpuCostPerSecondUSD: 0.000975,
+    pricingModel: 'per_image',
+  },
+  'black-forest-labs/flux-pro': {
+    costPerImageUSD: 0.04,
+    estimatedGpuSeconds: 12,
+    gpuCostPerSecondUSD: 0.000975,
+    pricingModel: 'per_image',
+  },
+  'stability-ai/stable-diffusion-3': {
+    costPerImageUSD: 0,
+    estimatedGpuSeconds: 6,
+    gpuCostPerSecondUSD: 0.0014,
+    pricingModel: 'per_second',
+  },
+};
+
+/** Default cost for unknown models (conservative estimate). */
+export const DEFAULT_MODEL_COST: ModelCostConfig = {
+  costPerImageUSD: 0.02,
+  estimatedGpuSeconds: 8,
+  gpuCostPerSecondUSD: 0.001,
+  pricingModel: 'per_image',
+};
+
+/** Cost estimate for a single render, in USD. */
+export interface DitCostEstimate {
+  /** Estimated cost in USD for this render. */
+  estimatedCostUSD: number;
+  /** Breakdown: base per-image cost. */
+  baseCostUSD: number;
+  /** Breakdown: estimated GPU compute cost. */
+  gpuCostUSD: number;
+  /** Breakdown: estimated prompt processing cost (T5 tokens). */
+  promptCostUSD: number;
+  /** The model pricing config used. */
+  model: string;
+  /** Pricing model used. */
+  pricingModel: 'per_image' | 'per_second';
+}
+
+/**
+ * T5-XXL token cost on Replicate (approximate, based on L40S GPU time).
+ * ~$0.000002 per 1K tokens (very small relative to image cost).
+ */
+export const T5_TOKEN_COST_PER_1K = 0.000002;
+
+/**
+ * Estimate the cost of a single DiT render in USD.
+ * Pure function — deterministic, no I/O.
+ *
+ * @param model - The Replicate model slug.
+ * @param numSteps - Inference steps (affects GPU time estimate).
+ * @param promptTokens - Estimated prompt token count.
+ * @param numOutputs - Number of output images (default 1).
+ * @returns Cost breakdown in USD.
+ */
+export function estimateDitCost(
+  model: string,
+  numSteps: number,
+  promptTokens: number,
+  numOutputs: number = 1,
+): DitCostEstimate {
+  const config = MODEL_COSTS[model] ?? DEFAULT_MODEL_COST;
+
+  // Scale GPU seconds by step count (reference: schnell=4 steps → 1.5s, dev=20 → 8s).
+  const referenceSteps = model.includes('schnell') ? 4 : model.includes('dev') ? 20 : 28;
+  const stepRatio = Math.max(0.25, Math.min(2, numSteps / referenceSteps));
+  const scaledGpuSeconds = config.estimatedGpuSeconds * stepRatio;
+
+  // GPU compute cost.
+  const gpuCostUSD = scaledGpuSeconds * config.gpuCostPerSecondUSD * numOutputs;
+
+  // Base per-image cost (FLUX.1 models) or zero (SD3, billed by time).
+  const baseCostUSD = config.costPerImageUSD * numOutputs;
+
+  // Prompt token cost (T5-XXL encoding, very small).
+  const promptCostUSD = (promptTokens / 1000) * T5_TOKEN_COST_PER_1K;
+
+  // Total estimate.
+  const estimatedCostUSD = baseCostUSD + gpuCostUSD + promptCostUSD;
+
+  return {
+    estimatedCostUSD: Math.round(estimatedCostUSD * 1_000_000) / 1_000_000,
+    baseCostUSD: Math.round(baseCostUSD * 1_000_000) / 1_000_000,
+    gpuCostUSD: Math.round(gpuCostUSD * 1_000_000) / 1_000_000,
+    promptCostUSD: Math.round(promptCostUSD * 1_000_000) / 1_000_000,
+    model,
+    pricingModel: config.pricingModel,
+  };
+}
+
 // ── Types ───────────────────────────────────────────────────────────────────
 
 /** Generation metadata returned with successful renders for observability. */
@@ -140,6 +278,16 @@ export interface DitGenerationMetadata {
   outputFormat: DitOutputFormat;
   /** Estimated prompt token count (rough: chars / 4). */
   promptTokens: number;
+  /** Estimated cost in USD for this render. */
+  estimatedCostUSD: number;
+  /** Cost breakdown: base per-image cost in USD. */
+  costBaseUSD: number;
+  /** Cost breakdown: GPU compute cost in USD. */
+  costGpuUSD: number;
+  /** Cost breakdown: prompt processing cost in USD. */
+  costPromptUSD: number;
+  /** Pricing model used: 'per_image' or 'per_second'. */
+  costPricingModel: 'per_image' | 'per_second';
 }
 
 export interface DitImageProviderOptions {
@@ -268,7 +416,8 @@ export class DitImageProvider implements RenderProvider {
     const fullPath = path.join(this.storageDir, storageKey);
     await this.writeFile(fullPath, bytes);
 
-    // Build generation metadata for observability
+    // Build generation metadata for observability, including cost estimation.
+    const cost = estimateDitCost(this.model, this.numSteps, promptTokens);
     const metadata: DitGenerationMetadata = {
       model: this.model,
       seed: this.seed, // Only include if explicitly set (not random)
@@ -279,6 +428,11 @@ export class DitImageProvider implements RenderProvider {
       aspectRatio,
       outputFormat: this.outputFormat,
       promptTokens,
+      estimatedCostUSD: cost.estimatedCostUSD,
+      costBaseUSD: cost.baseCostUSD,
+      costGpuUSD: cost.gpuCostUSD,
+      costPromptUSD: cost.promptCostUSD,
+      costPricingModel: cost.pricingModel,
     };
 
     return { storageKey, mimeType, metadata: metadata as unknown as Record<string, unknown> };
@@ -423,6 +577,99 @@ export class DitImageProvider implements RenderProvider {
     }
 
     throw new AppError(502, 'DiT prediction timed out', 'DIT_REQUEST_FAILED');
+  }
+
+  // ── Batch rendering ────────────────────────────────────────────────────
+
+  /**
+   * Render multiple specs in parallel with bounded concurrency.
+   * Submits all predictions at once, polls them in parallel, downloads
+   * images in parallel — much faster than sequential single renders.
+   *
+   * The concurrency is limited to prevent overwhelming the Replicate API
+   * (which rate limits concurrent predictions per token).
+   */
+  async renderBatch(
+    specs: ResolvedRenderSpec[],
+    concurrency: number = 4,
+  ): Promise<Array<{ spec: ResolvedRenderSpec; result?: RenderOutput; error?: AppError }>> {
+    if (!this.apiToken || this.apiToken.trim().length === 0) {
+      throw new AppError(502, 'DiT AI not configured (missing REPLICATE_API_TOKEN)', 'DIT_NOT_CONFIGURED');
+    }
+
+    const maxConcurrency = Math.max(1, Math.floor(concurrency));
+    const results: Array<{ spec: ResolvedRenderSpec; result?: RenderOutput; error?: AppError }> =
+      specs.map((spec) => ({ spec }));
+
+    // Phase 1: create all predictions in parallel.
+    const predictionIds: Array<{ index: number; id: string } | { index: number; error: AppError }> = [];
+    const createPromises = specs.map(async (spec, i) => {
+      try {
+        const prompt = buildDitImagePrompt(spec);
+        const aspectRatio = this.aspectRatioOverride ?? this.deriveAspectRatio(spec);
+        const effectiveSeed = this.seed ?? Math.floor(Math.random() * 2_147_483_647);
+        const id = await this.createPrediction(prompt, aspectRatio, effectiveSeed);
+        return { index: i, id } as const;
+      } catch (err) {
+        return { index: i, error: err instanceof AppError ? err : new AppError(502, String(err), 'DIT_REQUEST_FAILED') } as const;
+      }
+    });
+
+    const created = await Promise.all(createPromises);
+    for (const c of created) {
+      predictionIds.push(c);
+    }
+
+    // Phase 2: poll all predictions in parallel with bounded concurrency.
+    const pollPromises: Promise<void>[] = [];
+    for (const entry of predictionIds) {
+      if ('error' in entry) {
+        results[entry.index].error = entry.error;
+        continue;
+      }
+
+      const pollPromise = (async () => {
+        try {
+          const { result: data } = await this.pollPrediction(entry.id);
+          const { bytes, mimeType } = await this.extractImage(data);
+
+          const spec = specs[entry.index];
+          const ext = this.outputFormat === 'jpeg' ? '.jpg'
+            : this.outputFormat === 'webp' ? '.webp'
+            : imageExtensionForMime(mimeType);
+          const storageKey = `assets/${spec.kind}/${randomUUID()}${ext}`;
+          const fullPath = path.join(this.storageDir, storageKey);
+          await this.writeFile(fullPath, bytes);
+
+          // Include cost estimation in batch result metadata.
+          const prompt = buildDitImagePrompt(spec);
+          const cost = estimateDitCost(this.model, this.numSteps, Math.ceil(prompt.length / 4));
+          results[entry.index].result = {
+            storageKey,
+            mimeType,
+            metadata: {
+              estimatedCostUSD: cost.estimatedCostUSD,
+              costBaseUSD: cost.baseCostUSD,
+              costGpuUSD: cost.gpuCostUSD,
+              costPromptUSD: cost.promptCostUSD,
+              costPricingModel: cost.pricingModel,
+            },
+          };
+        } catch (err) {
+          results[entry.index].error =
+            err instanceof AppError ? err : new AppError(502, String(err), 'DIT_REQUEST_FAILED');
+        }
+      })();
+
+      pollPromises.push(pollPromise);
+    }
+
+    // Wait for all polls to complete (they run in parallel via the event loop).
+    if (pollPromises.length > 0) {
+      await Promise.all(pollPromises);
+    }
+
+    return results;
   }
 
   // ── Response extraction ─────────────────────────────────────────────────

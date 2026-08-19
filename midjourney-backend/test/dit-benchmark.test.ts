@@ -36,8 +36,13 @@ import {
   POLL_INITIAL_INTERVAL_MS,
   POLL_MAX_INTERVAL_MS,
   POLL_MAX_ATTEMPTS,
+  estimateDitCost,
+  MODEL_COSTS,
+  DEFAULT_MODEL_COST,
+  T5_TOKEN_COST_PER_1K,
   type DitGenerationMetadata,
   type DitOutputFormat,
+  type DitCostEstimate,
 } from '../src/marketing/assets/providers/ditImageProvider';
 import {
   MediaRenderProvider,
@@ -1193,6 +1198,172 @@ describe('Benchmark: Integration Quality', () => {
 
     it('POLL_MAX_ATTEMPTS is 60', () => {
       expect(POLL_MAX_ATTEMPTS).toBe(60);
+    });
+  });
+
+  // ── Cost Estimation ────────────────────────────────────────────────────
+
+  describe('Cost Estimation', () => {
+    it('estimateDitCost returns positive cost for FLUX.1 schnell', () => {
+      const cost = estimateDitCost('black-forest-labs/flux-schnell', 4, 100);
+      expect(cost.estimatedCostUSD).toBeGreaterThan(0);
+      expect(cost.baseCostUSD).toBe(0.003);
+      expect(cost.pricingModel).toBe('per_image');
+    });
+
+    it('estimateDitCost returns positive cost for FLUX.1 dev', () => {
+      const cost = estimateDitCost('black-forest-labs/flux-dev', 20, 100);
+      expect(cost.estimatedCostUSD).toBeGreaterThan(0);
+      expect(cost.baseCostUSD).toBe(0.025);
+      expect(cost.pricingModel).toBe('per_image');
+    });
+
+    it('estimateDitCost returns positive cost for FLUX.11.1-pro', () => {
+      const cost = estimateDitCost('black-forest-labs/flux-1.1-pro', 28, 100);
+      expect(cost.estimatedCostUSD).toBeGreaterThan(0);
+      expect(cost.baseCostUSD).toBe(0.04);
+      expect(cost.pricingModel).toBe('per_image');
+    });
+
+    it('estimateDitCost returns positive cost for SD3 (per_second)', () => {
+      const cost = estimateDitCost('stability-ai/stable-diffusion-3', 28, 100);
+      expect(cost.estimatedCostUSD).toBeGreaterThan(0);
+      expect(cost.baseCostUSD).toBe(0);
+      expect(cost.pricingModel).toBe('per_second');
+    });
+
+    it('estimateDitCost uses default for unknown models', () => {
+      const cost = estimateDitCost('unknown/model-v1', 20, 100);
+      expect(cost.estimatedCostUSD).toBeGreaterThan(0);
+      expect(cost.model).toBe('unknown/model-v1');
+      expect(cost.pricingModel).toBe('per_image');
+    });
+
+    it('estimateDitCost scales GPU cost with step count', () => {
+      const cost20 = estimateDitCost('black-forest-labs/flux-dev', 20, 100);
+      const cost40 = estimateDitCost('black-forest-labs/flux-dev', 40, 100);
+      // More steps = more GPU time = higher cost.
+      expect(cost40.gpuCostUSD).toBeGreaterThan(cost20.gpuCostUSD);
+      // Base cost unchanged.
+      expect(cost40.baseCostUSD).toBe(cost20.baseCostUSD);
+    });
+
+    it('estimateDitCost clamps step ratio to avoid extreme estimates', () => {
+      const cost1 = estimateDitCost('black-forest-labs/flux-dev', 1, 100);
+      const cost100 = estimateDitCost('black-forest-labs/flux-dev', 100, 100);
+      // Even with 1 step, cost is not zero (clamped to 0.25x).
+      expect(cost1.gpuCostUSD).toBeGreaterThan(0);
+      // With 100 steps, cost is capped at 2x reference.
+      expect(cost100.gpuCostUSD).toBeLessThan(cost100.baseCostUSD * 10);
+    });
+
+    it('estimateDitCost includes prompt token cost', () => {
+      const costLow = estimateDitCost('black-forest-labs/flux-schnell', 4, 50);
+      const costHigh = estimateDitCost('black-forest-labs/flux-schnell', 4, 500);
+      expect(costHigh.promptCostUSD).toBeGreaterThan(costLow.promptCostUSD);
+    });
+
+    it('estimateDitCost multiplies by numOutputs', () => {
+      const cost1 = estimateDitCost('black-forest-labs/flux-dev', 20, 100, 1);
+      const cost3 = estimateDitCost('black-forest-labs/flux-dev', 20, 100, 3);
+      expect(cost3.baseCostUSD).toBeCloseTo(cost1.baseCostUSD * 3, 6);
+      expect(cost3.gpuCostUSD).toBeCloseTo(cost1.gpuCostUSD * 3, 6);
+    });
+
+    it('estimateDitCost returns 6-decimal precision', () => {
+      const cost = estimateDitCost('black-forest-labs/flux-schnell', 4, 100);
+      const decimals = String(cost.estimatedCostUSD).split('.')[1]?.length ?? 0;
+      expect(decimals).toBeLessThanOrEqual(6);
+    });
+
+    it('render() includes cost in metadata', async () => {
+      let capturedMetadata: DitGenerationMetadata | undefined;
+      const http = fakeHttp({
+        post: async () => ({ status: 201, ok: true, body: { id: 'p1', status: 'starting' } }),
+        get: async (url) => {
+          if (url.includes('replicate.com')) {
+            return { status: 200, ok: true, body: { id: 'p1', status: 'succeeded', output: ['https://cdn.example.test/img/out.png'] } };
+          }
+          return { status: 200, ok: true, body: PNG_1X1_BASE64 };
+        },
+      });
+
+      const provider = new DitImageProvider({
+        apiToken: 'r8_test-token',
+        http,
+        storageDir: '/tmp/render',
+        writeFile: async () => undefined,
+        sleep: noSleep,
+      });
+
+      const spec = resolveRenderSpec('poster', fallbackBrandSpec('poster'), imageCopy);
+      const out = await provider.render(spec);
+      capturedMetadata = out.metadata as DitGenerationMetadata;
+
+      expect(capturedMetadata).toBeDefined();
+      expect(capturedMetadata!.estimatedCostUSD).toBeGreaterThan(0);
+      expect(capturedMetadata!.costBaseUSD).toBe(0.003);
+      expect(capturedMetadata!.costGpuUSD).toBeGreaterThan(0);
+      expect(capturedMetadata!.costPromptUSD).toBeGreaterThan(0);
+      expect(capturedMetadata!.costPricingModel).toBe('per_image');
+    });
+
+    it('renderBatch() includes cost in each result metadata', async () => {
+      const http = fakeHttp({
+        post: async (url, body) => {
+          const parsed = typeof body === 'string' ? JSON.parse(body) : body;
+          return { status: 201, ok: true, body: { id: `p-${Date.now()}`, status: 'starting', version: (parsed as { version: string }).version } };
+        },
+        get: async (url) => {
+          if (url.includes('replicate.com')) {
+            return { status: 200, ok: true, body: { id: 'p', status: 'succeeded', output: ['https://cdn.example.test/img/out.png'] } };
+          }
+          return { status: 200, ok: true, body: PNG_1X1_BASE64 };
+        },
+      });
+
+      const provider = new DitImageProvider({
+        apiToken: 'r8_test-token',
+        http,
+        storageDir: '/tmp/render',
+        writeFile: async () => undefined,
+        sleep: noSleep,
+      });
+
+      const specs = ['poster', 'thumbnail'].map((k) =>
+        resolveRenderSpec(k as AssetKind, fallbackBrandSpec(k as AssetKind), imageCopy),
+      );
+
+      const results = await provider.renderBatch(specs, 2);
+
+      for (const r of results) {
+        expect(r.result).toBeDefined();
+        const meta = r.result!.metadata as Record<string, unknown>;
+        expect(meta.estimatedCostUSD).toBeGreaterThan(0);
+        expect(meta.costBaseUSD).toBe(0.003);
+        expect(meta.costPricingModel).toBe('per_image');
+      }
+    });
+
+    it('MODEL_COSTS covers all supported models', () => {
+      expect(MODEL_COSTS['black-forest-labs/flux-schnell']).toBeDefined();
+      expect(MODEL_COSTS['black-forest-labs/flux-dev']).toBeDefined();
+      expect(MODEL_COSTS['black-forest-labs/flux-1.1-pro']).toBeDefined();
+      expect(MODEL_COSTS['black-forest-labs/flux-pro']).toBeDefined();
+      expect(MODEL_COSTS['stability-ai/stable-diffusion-3']).toBeDefined();
+    });
+
+    it('DEFAULT_MODEL_COST has sensible defaults', () => {
+      expect(DEFAULT_MODEL_COST.costPerImageUSD).toBeGreaterThan(0);
+      expect(DEFAULT_MODEL_COST.estimatedGpuSeconds).toBeGreaterThan(0);
+      expect(DEFAULT_MODEL_COST.gpuCostPerSecondUSD).toBeGreaterThan(0);
+    });
+
+    it('T5_TOKEN_COST_PER_1K is very small', () => {
+      // Prompt cost should be negligible vs image cost.
+      const promptCost = (500 / 1000) * T5_TOKEN_COST_PER_1K;
+      const imageCost = MODEL_COSTS['black-forest-labs/flux-schnell'].costPerImageUSD;
+      expect(promptCost).toBeLessThan(imageCost * 0.01);
     });
   });
 });

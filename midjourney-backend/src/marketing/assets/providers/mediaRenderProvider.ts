@@ -69,6 +69,57 @@ export class MediaRenderProvider implements RenderProvider {
     }
     return this.image.render(spec);
   }
+
+  /**
+   * Render multiple specs in parallel. Delegates to the underlying image/video
+   * provider's renderBatch if available, otherwise falls back to sequential
+   * single renders via the base render() method.
+   */
+  async renderBatch(
+    specs: ResolvedRenderSpec[],
+    concurrency: number = 4,
+  ): Promise<Array<{ spec: ResolvedRenderSpec; result?: RenderOutput; error?: Error }>> {
+    // Check if the image provider supports batch rendering (DitImageProvider does).
+    if ('renderBatch' in this.image && typeof (this.image as { renderBatch?: Function }).renderBatch === 'function') {
+      // Split specs by modality: images vs videos.
+      const imageSpecs = specs.filter((s) => s.kind !== 'short_video');
+      const videoSpecs = specs.filter((s) => s.kind === 'short_video');
+
+      const imageResults = imageSpecs.length > 0
+        ? await (this.image as { renderBatch(s: ResolvedRenderSpec[], c: number): Promise<Array<{ spec: ResolvedRenderSpec; result?: RenderOutput; error?: Error }>> }).renderBatch(imageSpecs, concurrency)
+        : [];
+
+      // Videos don't have batch support yet — render sequentially.
+      const videoResults: Array<{ spec: ResolvedRenderSpec; result?: RenderOutput; error?: Error }> = [];
+      for (const spec of videoSpecs) {
+        try {
+          const result = await this.video.render(spec);
+          videoResults.push({ spec, result });
+        } catch (err) {
+          videoResults.push({ spec, error: err instanceof Error ? err : new Error(String(err)) });
+        }
+      }
+
+      // Merge results back in input order.
+      const resultMap = new Map<ResolvedRenderSpec, { spec: ResolvedRenderSpec; result?: RenderOutput; error?: Error }>();
+      for (const r of [...imageResults, ...videoResults]) {
+        resultMap.set(r.spec, r);
+      }
+      return specs.map((s) => resultMap.get(s) ?? { spec: s, error: new Error('Missing result') });
+    }
+
+    // Fallback: render sequentially.
+    const results: Array<{ spec: ResolvedRenderSpec; result?: RenderOutput; error?: Error }> = [];
+    for (const spec of specs) {
+      try {
+        const result = await this.render(spec);
+        results.push({ spec, result });
+      } catch (err) {
+        results.push({ spec, error: err instanceof Error ? err : new Error(String(err)) });
+      }
+    }
+    return results;
+  }
 }
 
 /** Resolve the rendered-asset output directory from env (or a sensible default). */

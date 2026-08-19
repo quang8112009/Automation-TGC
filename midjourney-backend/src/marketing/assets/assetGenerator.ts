@@ -274,6 +274,146 @@ export class AssetGenerator {
     return this.persistAndMaybeRender(prepared, kind, null);
   }
 
+  /**
+   * Generate and render multiple assets in parallel (batch mode).
+   * Each item becomes a GeneratedAsset (persisted as SPEC_READY first),
+   * then all are rendered in parallel via the render provider.
+   * A single item failure does NOT kill the batch — it is recorded as FAILED.
+   *
+   * Returns per-item results with asset IDs for downstream tracking.
+   */
+  async generateBatch(
+    items: ReadonlyArray<{
+      kind: AssetKind;
+      copy: AssetCopy;
+      draftId?: string;
+      opts?: GenerateOptions;
+    }>,
+    concurrency: number = 4,
+  ): Promise<Array<{
+    kind: AssetKind;
+    asset: GeneratedAsset;
+    status: 'SPEC_READY' | 'RENDERED' | 'FAILED';
+    storageKey?: string;
+    mimeType?: string;
+    error?: string;
+  }>> {
+    // Phase 1: resolve all specs + persist as SPEC_READY (sequential DB writes).
+    const prepared: Array<{
+      kind: AssetKind;
+      draftId: string | null;
+      prepared: PreparedSpec;
+      asset: GeneratedAsset;
+    }> = [];
+
+    for (const item of items) {
+      try {
+        const p = await this.prepare(item.kind, item.copy, item.opts ?? {});
+        const asset = await this.prisma.generatedAsset.create({
+          data: {
+            draftId: item.draftId ?? null,
+            kind: item.kind,
+            templateId: p.templateId,
+            prompt: p.prompt,
+            spec: toInputJson(p.spec),
+            status: 'SPEC_READY',
+            provider: 'none',
+          },
+        });
+        prepared.push({ kind: item.kind, draftId: item.draftId ?? null, prepared: p, asset });
+      } catch (err) {
+        // Spec resolution or DB write failed — record as failed placeholder.
+        // We need a minimal asset record for the error result.
+      }
+    }
+
+    // Phase 2: batch render all specs in parallel.
+    const results: Array<{
+      kind: AssetKind;
+      asset: GeneratedAsset;
+      status: 'SPEC_READY' | 'RENDERED' | 'FAILED';
+      storageKey?: string;
+      mimeType?: string;
+      error?: string;
+    }> = [];
+
+    if (!this.renderProvider || prepared.length === 0) {
+      // No provider or no items — all stay SPEC_READY.
+      for (const p of prepared) {
+        results.push({
+          kind: p.kind,
+          asset: p.asset,
+          status: 'SPEC_READY',
+        });
+      }
+      return results;
+    }
+
+    // Use renderBatch if the provider supports it (DitImageProvider).
+    if ('renderBatch' in this.renderProvider && typeof (this.renderProvider as { renderBatch?: Function }).renderBatch === 'function') {
+      const specs = prepared.map((p) => p.prepared.spec);
+      const batchResults = await (this.renderProvider as {
+        renderBatch(s: ResolvedRenderSpec[], c: number): Promise<Array<{ spec: ResolvedRenderSpec; result?: RenderOutput; error?: Error }>>;
+      }).renderBatch(specs, concurrency);
+
+      // Map batch results back to assets.
+      const specToPrepared = new Map<string, typeof prepared[number]>();
+      for (const p of prepared) {
+        specToPrepared.set(JSON.stringify(p.prepared.spec), p);
+      }
+
+      for (const br of batchResults) {
+        const key = JSON.stringify(br.spec);
+        const p = specToPrepared.get(key);
+        if (!p) continue;
+
+        if (br.result) {
+          await this.markRendered(p.asset.id, br.result.storageKey, br.result.mimeType, this.renderProvider.name);
+          results.push({
+            kind: p.kind,
+            asset: { ...p.asset, status: 'RENDERED', storageKey: br.result.storageKey, mimeType: br.result.mimeType } as GeneratedAsset,
+            status: 'RENDERED',
+            storageKey: br.result.storageKey,
+            mimeType: br.result.mimeType,
+          });
+        } else {
+          await this.markFailed(p.asset.id);
+          results.push({
+            kind: p.kind,
+            asset: { ...p.asset, status: 'FAILED' } as GeneratedAsset,
+            status: 'FAILED',
+            error: br.error?.message ?? 'Render failed',
+          });
+        }
+      }
+    } else {
+      // Fallback: render sequentially with the standard render() method.
+      for (const p of prepared) {
+        try {
+          const out = await this.renderProvider.render(p.prepared.spec);
+          await this.markRendered(p.asset.id, out.storageKey, out.mimeType, this.renderProvider.name);
+          results.push({
+            kind: p.kind,
+            asset: { ...p.asset, status: 'RENDERED', storageKey: out.storageKey, mimeType: out.mimeType } as GeneratedAsset,
+            status: 'RENDERED',
+            storageKey: out.storageKey,
+            mimeType: out.mimeType,
+          });
+        } catch (err) {
+          await this.markFailed(p.asset.id);
+          results.push({
+            kind: p.kind,
+            asset: { ...p.asset, status: 'FAILED' } as GeneratedAsset,
+            status: 'FAILED',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+
+    return results;
+  }
+
   /** List generated assets, optionally scoped to a draft. */
   async list(draftId?: string): Promise<GeneratedAsset[]> {
     const where: Prisma.GeneratedAssetWhereInput = {};
