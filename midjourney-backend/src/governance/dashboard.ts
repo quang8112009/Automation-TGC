@@ -28,6 +28,7 @@ import { classifyObject, type ClassificationLevel } from './classification';
 import { scanWorkload, type ProtectionReport } from './protection';
 import { RetentionPolicy } from './retention';
 import { ComplianceAlerter, type ComplianceSnapshot, type EvaluationResult } from './alerting';
+import { getComplianceMetrics } from './metrics';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -182,6 +183,7 @@ export interface ComplianceDashboardOverview {
 export class ComplianceDashboard {
   private readonly auditLogger: AuditLogger;
   private readonly alerter: ComplianceAlerter;
+  private readonly metrics = getComplianceMetrics();
   private cache: Map<string, { data: unknown; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 60_000; // 60 seconds
 
@@ -253,10 +255,23 @@ export class ComplianceDashboard {
       dsar: { complianceRate: dsar.complianceRate },
     };
 
-    // Fire-and-forget: never block the response for alerting.
-    this.alerter.evaluate(complianceScore, snapshot).catch((err) => {
-      console.error('[GOVERNANCE-ALERT] Evaluation failed:', err);
-    });
+    // ── Record Prometheus metrics ─────────────────────────────────────
+    const evalStart = Date.now();
+
+    // Fire-and-forget: alerting + metrics, never block the response.
+    this.alerter.evaluate(complianceScore, snapshot)
+      .then((alertResult) => {
+        const durationMs = Date.now() - evalStart;
+        this.metrics.recordEvaluation(
+          complianceScore,
+          { audit, piiExposure, retention, consent, protection, dsar },
+          alertResult,
+          durationMs,
+        );
+      })
+      .catch((err) => {
+        console.error('[GOVERNANCE-ALERT] Evaluation failed:', err);
+      });
 
     return overview;
   }

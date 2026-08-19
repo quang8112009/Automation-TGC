@@ -19,6 +19,7 @@ import type { JwtService } from '../auth/jwt';
 import { getAuth, rbacGuard, requireAuth } from '../http/authMiddleware';
 import type { RbacAuditor } from '../http/authMiddleware';
 import { ComplianceDashboard } from './dashboard';
+import { getComplianceMetrics } from './metrics';
 
 export interface GovernanceRouteDeps {
   prisma: PrismaClient;
@@ -172,6 +173,22 @@ export function registerGovernanceRoutes(app: FastifyInstance, deps: GovernanceR
         alertsFired: result.alerts.length,
         score: result.score,
       });
+    },
+  );
+
+  // ── Prometheus /metrics endpoint ────────────────────────────────────
+  const metrics = getComplianceMetrics();
+  metrics.setAlertCooldown(alerter['thresholds'].cooldownMs);
+
+  // GET /api/v1/governance/metrics — Prometheus exposition format.
+  // No auth required (Prometheus needs to scrape this unauthenticated).
+  // Mounted at a separate path to avoid conflicting with the auth-guarded routes.
+  app.get(
+    '/api/v1/governance/metrics',
+    async (_request, reply) => {
+      const body = await metrics.getMetrics();
+      reply.header('Content-Type', metrics.getContentType());
+      return reply.code(200).send(body);
     },
   );
 }

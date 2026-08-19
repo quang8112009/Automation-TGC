@@ -130,3 +130,6 @@ export type {
   EvaluationResult,
   ComplianceSnapshot,
 } from './alerting';
+
+// ── Metrics ──────────────────────────────────────────────────────────────
+export { ComplianceMetrics, getComplianceMetrics, resetComplianceMetrics } from './metrics';

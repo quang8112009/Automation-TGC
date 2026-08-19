@@ -47,6 +47,7 @@ import type { AuthInfo } from '../http/authMiddleware';
 import type { Action } from '../auth/rbac';
 import { AUTH_RATE_LIMIT } from '../http/security';
 import type { EventBus } from '../infra/events';
+import { governanceRoute } from '../governance/middleware';
 
 export interface RouteDeps {
   prisma: PrismaClient;
@@ -199,7 +200,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
 
   app.post(
     '/api/leads',
-    { preHandler: [auth, leadTargetCollection('create')] },
+    { ...governanceRoute({ pii: true, audit: true }), preHandler: [auth, leadTargetCollection('create')] },
     async (request, reply) => {
       const actor = getAuth(request);
       const lead = await leadService.create((request.body ?? {}) as CreateLeadInput, actor);
@@ -209,7 +210,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
 
   app.get(
     '/api/leads',
-    { preHandler: [auth, leadTargetCollection('read')] },
+    { ...governanceRoute({ audit: true }), preHandler: [auth, leadTargetCollection('read')] },
     async (request, reply) => {
       const actor = getAuth(request);
       const q = (request.query ?? {}) as Record<string, unknown>;
@@ -292,7 +293,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
 
   app.put(
     '/api/leads/:id',
-    { preHandler: [auth, leadTargetById('update')] },
+    { ...governanceRoute({ pii: true, audit: true }), preHandler: [auth, leadTargetById('update')] },
     async (request, reply) => {
       const actor = getAuth(request);
       const { id } = request.params as IdParams;
@@ -303,7 +304,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
 
   app.delete(
     '/api/leads/:id',
-    { preHandler: [auth, leadTargetById('delete')] },
+    { ...governanceRoute({ audit: true, auditAction: 'DATA_DELETE' }), preHandler: [auth, leadTargetById('delete')] },
     async (request, reply) => {
       const actor = getAuth(request);
       const { id } = request.params as IdParams;
