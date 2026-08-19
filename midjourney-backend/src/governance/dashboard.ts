@@ -27,6 +27,7 @@ import { detectPii, type PiiType } from './pii';
 import { classifyObject, type ClassificationLevel } from './classification';
 import { scanWorkload, type ProtectionReport } from './protection';
 import { RetentionPolicy } from './retention';
+import { ComplianceAlerter, type ComplianceSnapshot, type EvaluationResult } from './alerting';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -180,11 +181,18 @@ export interface ComplianceDashboardOverview {
 
 export class ComplianceDashboard {
   private readonly auditLogger: AuditLogger;
+  private readonly alerter: ComplianceAlerter;
   private cache: Map<string, { data: unknown; expiresAt: number }> = new Map();
   private readonly CACHE_TTL_MS = 60_000; // 60 seconds
 
   constructor(private readonly prisma: PrismaClient) {
     this.auditLogger = new AuditLogger(prisma);
+    this.alerter = new ComplianceAlerter(prisma);
+  }
+
+  /** Access the alerter for external use (e.g. manual evaluation, history). */
+  getAlerter(): ComplianceAlerter {
+    return this.alerter;
   }
 
   /**
@@ -227,6 +235,29 @@ export class ComplianceDashboard {
     };
 
     this.setCache(cacheKey, overview);
+
+    // ── Fire compliance alerts asynchronously (never block the response).
+    // Errors are caught and logged, never propagated.
+    const snapshot: ComplianceSnapshot = {
+      audit: { totalEntries: audit.totalEntries },
+      piiExposure: {
+        overallClassification: piiExposure.overallClassification,
+        recommendations: piiExposure.recommendations,
+      },
+      retention: { overallStatus: retention.overallStatus },
+      consent: { consentRate: consent.consentRate },
+      protection: {
+        verdict: protection.verdict,
+        criticalFindings: protection.criticalFindings.map((f) => ({ id: f.id, title: f.title })),
+      },
+      dsar: { complianceRate: dsar.complianceRate },
+    };
+
+    // Fire-and-forget: never block the response for alerting.
+    this.alerter.evaluate(complianceScore, snapshot).catch((err) => {
+      console.error('[GOVERNANCE-ALERT] Evaluation failed:', err);
+    });
+
     return overview;
   }
 

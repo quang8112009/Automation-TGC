@@ -131,4 +131,47 @@ export function registerGovernanceRoutes(app: FastifyInstance, deps: GovernanceR
       return reply.code(200).send(overview);
     },
   );
+
+  // ── Alerting endpoints ─────────────────────────────────────────────────
+  const alerter = dashboard.getAlerter();
+
+  // GET /api/v1/governance/alerts — Alert history.
+  app.get(
+    '/api/v1/governance/alerts',
+    { preHandler: [auth, readGuard] },
+    async (request, reply) => {
+      const q = (request.query ?? {}) as Record<string, unknown>;
+      const alerts = await alerter.getAlertHistory({
+        limit: typeof q.limit === 'string' ? Math.min(Number(q.limit) || 50, 200) : 50,
+        severity: typeof q.severity === 'string' ? (q.severity as 'info' | 'warning' | 'critical') : undefined,
+        type: typeof q.type === 'string' ? (q.type as never) : undefined,
+        since: typeof q.since === 'string' ? q.since : undefined,
+      });
+      return reply.code(200).send({ alerts });
+    },
+  );
+
+  // GET /api/v1/governance/alerts/stats — Alert statistics.
+  app.get(
+    '/api/v1/governance/alerts/stats',
+    { preHandler: [auth, readGuard] },
+    async (_request, reply) => {
+      const stats = await alerter.getAlertStats();
+      return reply.code(200).send(stats);
+    },
+  );
+
+  // POST /api/v1/governance/alerts/test — Send a test alert (admin only).
+  app.post(
+    '/api/v1/governance/alerts/test',
+    { preHandler: [auth, readGuard] },
+    async (_request, reply) => {
+      const result = await alerter.evaluate(100, {});
+      return reply.code(200).send({
+        message: 'Test alert evaluation completed',
+        alertsFired: result.alerts.length,
+        score: result.score,
+      });
+    },
+  );
 }

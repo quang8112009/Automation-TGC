@@ -117,3 +117,16 @@ export type {
 
 // ── Routes ─────────────────────────────────────────────────────────────────
 export { registerGovernanceRoutes } from './routes';
+
+// ── Alerting ─────────────────────────────────────────────────────────────
+export { ComplianceAlerter } from './alerting';
+export type {
+  AlertSeverity,
+  AlertType,
+  AlertChannels,
+  AlertThresholds,
+  ComplianceAlert,
+  AlertHistoryEntry,
+  EvaluationResult,
+  ComplianceSnapshot,
+} from './alerting';
