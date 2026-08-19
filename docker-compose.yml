@@ -1,0 +1,112 @@
+# docker-compose.yml — Local development stack for AutoTGC.
+#
+# USAGE:
+#   docker compose up -d          # Start all services
+#   docker compose logs -f api    # Follow API logs
+#   docker compose down           # Stop all services
+#
+# SERVICES:
+#   api        — Node.js backend (port 3000)
+#   frontend   — React SPA via Nginx (port 8080)
+#   postgres   — PostgreSQL 16 (port 5432)
+#   redis      — Redis 7 (port 6379)
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: autotgc
+      POSTGRES_PASSWORD: dev-password-change-in-production
+      POSTGRES_DB: autotgc
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U autotgc']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # Security: drop all capabilities, only add what's needed.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - FOWNER
+      - DAC_READ_SEARCH
+
+  # ── Redis ───────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # Security: drop unnecessary capabilities.
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+
+  # ── Backend API ─────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./midjourney-backend
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: '3000'
+      HOST: '0.0.0.0'
+      DATABASE_URL: postgresql://autotgc:dev-password-change-in-production@postgres:5432/autotgc
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-jwt-secret-change-in-production-min-32-chars-long
+      FRONTEND_ORIGIN: '*'
+      TRUST_PROXY: 'false'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Security: read-only filesystem with writable tmpfs.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # ── Frontend ────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./midjourney-frontend
+      dockerfile: Dockerfile
+    ports:
+      - '8080:80'
+    depends_on:
+      - api
+    # Security: read-only filesystem.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  redis_data:

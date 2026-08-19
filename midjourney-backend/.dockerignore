@@ -1,0 +1,64 @@
+# .dockerignore — exclude dev/build artifacts from Docker context.
+# This reduces build context size and prevents leaking secrets.
+
+# Dependencies (reinstalled in container).
+node_modules/
+
+# Build output (rebuilt in container).
+dist/
+
+# Environment files (never in image).
+.env
+.env.*
+!.env.example
+
+# Tests (not needed in production).
+test/
+*.test.ts
+*.spec.ts
+coverage/
+.nyc_output/
+
+# Dev tools.
+.eslintrc.json
+eslint.config.*
+.prettierrc*
+tsconfig.json
+vitest.config.*
+
+# Git.
+.git/
+.gitignore
+.gitattributes
+
+# IDE.
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files.
+.DS_Store
+Thumbs.db
+
+# Deploy scripts (not needed in image).
+deploy/
+scripts/
+*.sh
+
+# Documentation.
+*.md
+LICENSE
+
+# Prisma migrations (applied via CI, not baked in).
+prisma/migrations/
+
+# Logs.
+*.log
+logs/
+
+# Docker (prevent recursive context).
+Dockerfile
+docker-compose*.yml
+.dockerignore

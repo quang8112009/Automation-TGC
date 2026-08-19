@@ -5,21 +5,29 @@
  * read/write; SALES has no access). This file is ADDITIVE — it exports a
  * registrar that the application can call without touching routes/index.ts.
  *
- * HONESTY NOTE: `/assets/*` endpoints return a GeneratedAsset whose status is
- * SPEC_READY (a render-ready blueprint), not a produced image/video file. No
- * pixel synthesis happens until a RenderProvider is wired into AssetGenerator.
+ * SECURITY: All request bodies and params are validated through Zod schemas
+ * before reaching business logic. Unknown fields are stripped, strings are
+ * trimmed and length-capped, and enums are closed sets.
  */
+import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { JwtService } from '../../auth/jwt';
 import type { Action, Module } from '../../auth/rbac';
 import { requireAuth, rbacGuard } from '../../http/authMiddleware';
-import { ValidationError } from '../../infra/errors';
+import {
+  validateBody,
+  validateQuery,
+  validateParams,
+  UUID,
+  AssetKindEnum,
+  MarketEnum,
+  TrimmedString,
+  OptionalString,
+} from '../../http/validation';
 import { BrandTemplateService } from './brandTemplateService';
 import { AssetGenerator } from './assetGenerator';
 import type { AssetCopy, RenderProvider } from './assetGenerator';
-import { isAssetKind } from './assetKinds';
-import type { AssetKind } from './assetKinds';
 
 export interface AssetRouteDeps {
   prisma: PrismaClient;
@@ -28,37 +36,67 @@ export interface AssetRouteDeps {
   renderProvider?: RenderProvider;
 }
 
-interface IdParams {
-  id: string;
-}
-
-function asString(v: unknown): string | undefined {
-  return typeof v === 'string' && v.length > 0 ? v : undefined;
-}
-
-function asStringArray(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.filter((x): x is string => typeof x === 'string');
-}
-
-function asBool(v: unknown): boolean {
-  return v === true || v === 'true';
-}
-
 function guard(module: Module, action: Action) {
   return rbacGuard(() => ({ module, action }));
 }
 
-function parseAssetKind(v: unknown): AssetKind {
-  const kind = asString(v);
-  if (!kind || !isAssetKind(kind)) {
-    throw new ValidationError(
-      'kind must be one of thumbnail|infographic|poster|short_video|image',
-      'ASSET_KIND_INVALID',
-    );
-  }
-  return kind;
-}
+// ── Zod schemas ─────────────────────────────────────────────────────────────
+
+const IdParamsSchema = z.object({ id: UUID });
+
+const BrandTemplateBodySchema = z.object({
+  name: TrimmedString(100),
+  kind: TrimmedString(50),
+  spec: z.unknown(),
+  active: z.boolean().optional(),
+});
+
+const BrandTemplateUpdateBodySchema = z.object({
+  name: TrimmedString(100).optional(),
+  spec: z.unknown().optional(),
+  active: z.boolean().optional(),
+});
+
+const BrandTemplateQuerySchema = z.object({
+  kind: OptionalString(50),
+  activeOnly: z.coerce.boolean().optional(),
+});
+
+const DraftAssetBodySchema = z.object({
+  draftId: UUID,
+  kind: AssetKindEnum,
+  templateId: UUID.optional(),
+});
+
+const StandaloneAssetBodySchema = z.object({
+  kind: AssetKindEnum,
+  title: TrimmedString(200),
+  body: z.string().trim().max(2000).default(''),
+  ctas: z.array(z.string().trim().max(100).min(1)).max(5).default([]),
+  market: MarketEnum.optional(),
+  templateId: UUID.optional(),
+});
+
+const BatchRenderItemSchema = z.object({
+  kind: AssetKindEnum,
+  title: TrimmedString(200),
+  body: z.string().trim().max(2000).default(''),
+  ctas: z.array(z.string().trim().max(100).min(1)).max(5).default([]),
+  market: MarketEnum.optional(),
+  draftId: UUID.optional(),
+  templateId: UUID.optional(),
+});
+
+const BatchRenderBodySchema = z.object({
+  items: z.array(BatchRenderItemSchema).min(1).max(20),
+  concurrency: z.number().int().min(1).max(10).default(4),
+});
+
+const AssetListQuerySchema = z.object({
+  draftId: UUID.optional(),
+});
+
+// ── Route registration ──────────────────────────────────────────────────────
 
 export async function registerAssetRoutes(app: FastifyInstance, deps: AssetRouteDeps): Promise<void> {
   const { prisma, jwt } = deps;
@@ -67,16 +105,17 @@ export async function registerAssetRoutes(app: FastifyInstance, deps: AssetRoute
   const generator = new AssetGenerator(prisma, deps.renderProvider);
 
   // ---- Brand templates -------------------------------------------------------
+
   app.post(
     '/api/v1/brand-templates',
-    { preHandler: [auth, guard('generation', 'create')] },
+    { preHandler: [auth, guard('generation', 'create'), validateBody(BrandTemplateBodySchema)] },
     async (request, reply) => {
-      const body = (request.body ?? {}) as Record<string, unknown>;
+      const body = (request as unknown as { validatedBody: z.infer<typeof BrandTemplateBodySchema> }).validatedBody;
       const tpl = await templates.create({
-        name: asString(body.name) ?? '',
-        kind: asString(body.kind) ?? '',
+        name: body.name,
+        kind: body.kind,
         spec: body.spec,
-        active: body.active === undefined ? undefined : asBool(body.active),
+        active: body.active,
       });
       return reply.code(201).send(tpl);
     },
@@ -84,12 +123,12 @@ export async function registerAssetRoutes(app: FastifyInstance, deps: AssetRoute
 
   app.get(
     '/api/v1/brand-templates',
-    { preHandler: [auth, guard('generation', 'read')] },
+    { preHandler: [auth, guard('generation', 'read'), validateQuery(BrandTemplateQuerySchema)] },
     async (request, reply) => {
-      const q = (request.query ?? {}) as Record<string, unknown>;
+      const q = (request as unknown as { validatedQuery: z.infer<typeof BrandTemplateQuerySchema> }).validatedQuery;
       const list = await templates.list({
-        kind: asString(q.kind),
-        activeOnly: q.activeOnly === undefined ? undefined : asBool(q.activeOnly),
+        kind: q.kind,
+        activeOnly: q.activeOnly,
       });
       return reply.code(200).send({ items: list });
     },
@@ -97,9 +136,9 @@ export async function registerAssetRoutes(app: FastifyInstance, deps: AssetRoute
 
   app.get(
     '/api/v1/brand-templates/:id',
-    { preHandler: [auth, guard('generation', 'read')] },
+    { preHandler: [auth, guard('generation', 'read'), validateParams(IdParamsSchema)] },
     async (request, reply) => {
-      const { id } = request.params as IdParams;
+      const { id } = (request as unknown as { validatedParams: { id: string } }).validatedParams;
       const tpl = await templates.get(id);
       return reply.code(200).send(tpl);
     },
@@ -107,14 +146,14 @@ export async function registerAssetRoutes(app: FastifyInstance, deps: AssetRoute
 
   app.put(
     '/api/v1/brand-templates/:id',
-    { preHandler: [auth, guard('generation', 'update')] },
+    { preHandler: [auth, guard('generation', 'update'), validateParams(IdParamsSchema), validateBody(BrandTemplateUpdateBodySchema)] },
     async (request, reply) => {
-      const { id } = request.params as IdParams;
-      const body = (request.body ?? {}) as Record<string, unknown>;
+      const { id } = (request as unknown as { validatedParams: { id: string } }).validatedParams;
+      const body = (request as unknown as { validatedBody: z.infer<typeof BrandTemplateUpdateBodySchema> }).validatedBody;
       const tpl = await templates.update(id, {
-        name: asString(body.name),
+        name: body.name,
         spec: body.spec,
-        active: body.active === undefined ? undefined : asBool(body.active),
+        active: body.active,
       });
       return reply.code(200).send(tpl);
     },
@@ -122,27 +161,23 @@ export async function registerAssetRoutes(app: FastifyInstance, deps: AssetRoute
 
   app.post(
     '/api/v1/brand-templates/:id/deactivate',
-    { preHandler: [auth, guard('generation', 'update')] },
+    { preHandler: [auth, guard('generation', 'update'), validateParams(IdParamsSchema)] },
     async (request, reply) => {
-      const { id } = request.params as IdParams;
+      const { id } = (request as unknown as { validatedParams: { id: string } }).validatedParams;
       const tpl = await templates.deactivate(id);
       return reply.code(200).send(tpl);
     },
   );
 
   // ---- Generated assets ------------------------------------------------------
+
   app.post(
     '/api/v1/assets/from-draft',
-    { preHandler: [auth, guard('generation', 'create')] },
+    { preHandler: [auth, guard('generation', 'create'), validateBody(DraftAssetBodySchema)] },
     async (request, reply) => {
-      const body = (request.body ?? {}) as Record<string, unknown>;
-      const draftId = asString(body.draftId);
-      if (!draftId) {
-        throw new ValidationError('draftId is required', 'ASSET_DRAFT_REQUIRED');
-      }
-      const kind = parseAssetKind(body.kind);
-      const asset = await generator.generateForDraft(draftId, kind, {
-        templateId: asString(body.templateId),
+      const body = (request as unknown as { validatedBody: z.infer<typeof DraftAssetBodySchema> }).validatedBody;
+      const asset = await generator.generateForDraft(body.draftId, body.kind, {
+        templateId: body.templateId,
       });
       return reply.code(201).send(asset);
     },
@@ -150,85 +185,61 @@ export async function registerAssetRoutes(app: FastifyInstance, deps: AssetRoute
 
   app.post(
     '/api/v1/assets/standalone',
-    { preHandler: [auth, guard('generation', 'create')] },
+    { preHandler: [auth, guard('generation', 'create'), validateBody(StandaloneAssetBodySchema)] },
     async (request, reply) => {
-      const body = (request.body ?? {}) as Record<string, unknown>;
-      const kind = parseAssetKind(body.kind);
-      const title = asString(body.title);
-      if (!title) {
-        throw new ValidationError('title is required', 'ASSET_TITLE_REQUIRED');
-      }
+      const body = (request as unknown as { validatedBody: z.infer<typeof StandaloneAssetBodySchema> }).validatedBody;
       const copy: AssetCopy = {
-        title,
-        body: asString(body.body) ?? '',
-        ctas: asStringArray(body.ctas),
-        market: asString(body.market),
+        title: body.title,
+        body: body.body,
+        ctas: body.ctas,
+        market: body.market,
       };
-      const asset = await generator.generateStandalone(kind, copy, {
-        templateId: asString(body.templateId),
+      const asset = await generator.generateStandalone(body.kind, copy, {
+        templateId: body.templateId,
       });
       return reply.code(201).send(asset);
     },
   );
 
   // ---- Batch generate + render ─────────────────────────────────────────────
+
   app.post(
     '/api/v1/assets/batch',
-    { preHandler: [auth, guard('generation', 'create')] },
+    { preHandler: [auth, guard('generation', 'create'), validateBody(BatchRenderBodySchema)] },
     async (request, reply) => {
-      const body = (request.body ?? {}) as Record<string, unknown>;
-      const rawItems = Array.isArray(body.items) ? body.items : [];
-      if (rawItems.length === 0) {
-        throw new ValidationError('items array is required and must not be empty', 'ASSET_BATCH_EMPTY');
-      }
-      if (rawItems.length > 20) {
-        throw new ValidationError('batch size limited to 20 items', 'ASSET_BATCH_TOO_LARGE');
-      }
+      const body = (request as unknown as { validatedBody: z.infer<typeof BatchRenderBodySchema> }).validatedBody;
+      const items = body.items.map((raw) => ({
+        kind: raw.kind,
+        copy: {
+          title: raw.title,
+          body: raw.body,
+          ctas: raw.ctas,
+          market: raw.market,
+        } as AssetCopy,
+        draftId: raw.draftId,
+        opts: { templateId: raw.templateId },
+      }));
 
-      const concurrency = typeof body.concurrency === 'number' && body.concurrency > 0
-        ? Math.min(Math.floor(body.concurrency), 10)
-        : 4;
-
-      const items = rawItems.map((raw: unknown) => {
-        const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-        const kind = parseAssetKind(r.kind);
-        const title = asString(r.title);
-        if (!title) {
-          throw new ValidationError('each item requires a title', 'ASSET_BATCH_ITEM_TITLE_REQUIRED');
-        }
-        return {
-          kind,
-          copy: {
-            title,
-            body: asString(r.body) ?? '',
-            ctas: asStringArray(r.ctas),
-            market: asString(r.market),
-          },
-          draftId: asString(r.draftId),
-          opts: { templateId: asString(r.templateId) },
-        };
-      });
-
-      const results = await generator.generateBatch(items, concurrency);
+      const results = await generator.generateBatch(items, body.concurrency);
       return reply.code(201).send({ items: results });
     },
   );
 
   app.get(
     '/api/v1/assets',
-    { preHandler: [auth, guard('generation', 'read')] },
+    { preHandler: [auth, guard('generation', 'read'), validateQuery(AssetListQuerySchema)] },
     async (request, reply) => {
-      const q = (request.query ?? {}) as Record<string, unknown>;
-      const list = await generator.list(asString(q.draftId));
+      const q = (request as unknown as { validatedQuery: z.infer<typeof AssetListQuerySchema> }).validatedQuery;
+      const list = await generator.list(q.draftId);
       return reply.code(200).send({ items: list });
     },
   );
 
   app.get(
     '/api/v1/assets/:id',
-    { preHandler: [auth, guard('generation', 'read')] },
+    { preHandler: [auth, guard('generation', 'read'), validateParams(IdParamsSchema)] },
     async (request, reply) => {
-      const { id } = request.params as IdParams;
+      const { id } = (request as unknown as { validatedParams: { id: string } }).validatedParams;
       const asset = await generator.get(id);
       return reply.code(200).send(asset);
     },

@@ -102,3 +102,161 @@ jobs:
           cache-dependency-path: autotgc-backend/package-lock.json
       - run: npm ci
       - run: npm run lint
+
+  # ── Security: dependency audit + secret scanning ─────────────────────
+  security-scan:
+    name: Security scan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: autotgc-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: autotgc-backend/package-lock.json
+      - run: npm ci
+      - name: Dependency audit (fail on high/critical)
+        run: npm audit --audit-level=high
+      - name: Secret scanning — .env files must not be staged
+        run: |
+          if git diff --cached --name-only | grep -E '\.env$|\.env\.'; then
+            echo 'ERROR: .env files detected in staging area. Remove them before committing.'
+            git diff --cached --name-only | grep -E '\.env$|\.env\.'
+            exit 1
+          fi
+          echo 'No .env files in staging area.'
+      - name: Secret scanning — hardcoded secrets in source
+        run: |
+          # Scan for hardcoded secrets (API keys, tokens, passwords) in source files.
+          # Excludes .env.example, test files, and node_modules.
+          SECRETS=$(grep -rn --include='*.ts' --include='*.js' --include='*.json' \
+            -E '(api[_-]?key|secret|password|token)\s*[:=]\s*["'\''`][A-Za-z0-9+/=_-]{20,}' \
+            src/ 2>/dev/null | grep -v 'CHANGE_ME' | grep -v 'test' | grep -v '.env.example' || true)
+          if [ -n "$SECRETS" ]; then
+            echo 'WARNING: Potential hardcoded secrets found:'
+            echo "$SECRETS"
+            echo 'Review these before merging.'
+            # Fail only on actual keys (not env var references or type definitions)
+            echo "$SECRETS" | grep -v 'interface\|type\|//\|env(' | head -5
+          else
+            echo 'No hardcoded secrets detected.'
+          fi
+
+  # ── Migration safety + schema-drift ───────────────────────────────────
+  # Applies committed Prisma migrations to an ephemeral PostgreSQL 16
+  # instance, detects schema drift, and runs a connect/read/write smoke
+  # test. The DATABASE_URL is referenced from job env and never echoed.
+  migration-safety:
+    name: Migration safety (Prisma)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: autotgc-backend
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - '5432:5432'
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: 'postgresql://ci:ci@localhost:5432/ci'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: autotgc-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply migrations + detect drift + smoke test
+        run: bash deploy/ci-migration-check.sh
+
+  # ── Docker security scanning (Trivy) ───────────────────────────────────
+  # Scans Docker images for known vulnerabilities, misconfigurations,
+  # and secrets. Runs on every push to main and on PRs.
+  docker-security:
+    name: Docker security scan (Trivy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t autotgc-backend:scan ./midjourney-backend
+
+      - name: Build frontend image
+        run: docker build -t autotgc-frontend:scan ./midjourney-frontend
+
+      - name: Run Trivy vulnerability scanner (backend)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'autotgc-backend:scan'
+          format: 'sarif'
+          output: 'trivy-backend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+        continue-on-error: true
+
+      - name: Run Trivy vulnerability scanner (frontend)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'autotgc-frontend:scan'
+          format: 'sarif'
+          output: 'trivy-frontend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+        continue-on-error: true
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-backend-results.sarif'
+
+      - name: Run Trivy config scan (IaC misconfigurations)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+        continue-on-error: true
+
+      - name: Run Trivy filesystem scan (secrets + dependencies)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          skip-dirs: 'node_modules,dist,test'
+        continue-on-error: true

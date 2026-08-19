@@ -1,0 +1,92 @@
+# Dependabot configuration — automated dependency updates for AutoTGC.
+#
+# Security: Dependabot opens PRs for vulnerable dependencies automatically.
+# Updates are grouped by ecosystem and limited to avoid PR noise.
+#
+# Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+
+version: 2
+updates:
+  # ── npm: midjourney-backend ────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/midjourney-backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Ho_Chi_Minh"
+    # Group minor + patch updates to reduce PR volume.
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      dev-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    # Always open a PR for security fixes regardless of grouping.
+    open-pull-requests-limit: 10
+    reviewers:
+      - "quang8112009"
+    labels:
+      - "dependencies"
+      - "security"
+    # Commit message prefix for consistency.
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # ── npm: midjourney-frontend ───────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/midjourney-frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Ho_Chi_Minh"
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      dev-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "quang8112009"
+    labels:
+      - "dependencies"
+      - "security"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # ── GitHub Actions ─────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Ho_Chi_Minh"
+    # Always update Actions to latest (security patches are critical).
+    groups:
+      actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "quang8112009"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
