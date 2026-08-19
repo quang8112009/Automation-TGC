@@ -133,3 +133,20 @@ export type {
 
 // ── Metrics ──────────────────────────────────────────────────────────────
 export { ComplianceMetrics, getComplianceMetrics, resetComplianceMetrics } from './metrics';
+
+// ── Response Masking ──────────────────────────────────────────────────────
+export {
+  maskLeadResponse,
+  maskLeadsResponse,
+  maskCandidateResponse,
+  maskCandidatesResponse,
+  maskIntakeResponse,
+  maskIntakeArrayResponse,
+  maskLeadListResponse,
+  maskCandidateListResponse,
+  resolveAccessLevel,
+  maskArray,
+  type PiiAccessLevel,
+  type FieldMaskRule,
+  type ResourceMaskConfig,
+} from './responseMasking';

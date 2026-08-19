@@ -36,6 +36,11 @@ import type {
 } from './candidateService';
 import { CandidateAnalyticsService } from './candidateAnalytics';
 import { governanceRoute } from '../governance/middleware';
+import {
+  maskCandidateResponse,
+  maskCandidatesResponse,
+  resolveAccessLevel,
+} from '../governance/responseMasking';
 
 export interface RecruitmentRouteDeps {
   prisma: PrismaClient;
@@ -201,7 +206,8 @@ export async function registerRecruitmentRoutes(
       const q = (request.query ?? {}) as Record<string, unknown>;
       const allowDuplicate = asBool(body.allowDuplicate) || asBool(q.allowDuplicate);
       const candidate = await candidateService.create(body, actor, { allowDuplicate });
-      return reply.code(201).send(candidate);
+      const level = resolveAccessLevel(actor.role);
+      return reply.code(201).send(maskCandidateResponse(candidate as Record<string, unknown>, level));
     },
   );
 
@@ -222,7 +228,12 @@ export async function registerRecruitmentRoutes(
         asInt(q.limit, 20),
         actor,
       );
-      return reply.code(200).send(result);
+      const level = resolveAccessLevel(actor.role);
+      const safeResult = {
+        ...result,
+        items: maskCandidatesResponse((result.items ?? []) as Record<string, unknown>[], level),
+      };
+      return reply.code(200).send(safeResult);
     },
   );
 
@@ -340,12 +351,13 @@ export async function registerRecruitmentRoutes(
 
   app.get(
     '/api/v1/candidates/:id',
-    { preHandler: [auth, candidateTargetById('read')] },
+    { ...governanceRoute({ audit: true }), preHandler: [auth, candidateTargetById('read')] },
     async (request, reply) => {
       const actor = getAuth(request);
       const { id } = request.params as IdParams;
       const candidate = await candidateService.get(id, actor);
-      return reply.code(200).send(candidate);
+      const level = resolveAccessLevel(actor.role);
+      return reply.code(200).send(maskCandidateResponse(candidate as Record<string, unknown>, level));
     },
   );
 
@@ -360,7 +372,8 @@ export async function registerRecruitmentRoutes(
         (request.body ?? {}) as UpdateCandidateInput,
         actor,
       );
-      return reply.code(200).send(candidate);
+      const level = resolveAccessLevel(actor.role);
+      return reply.code(200).send(maskCandidateResponse(candidate as Record<string, unknown>, level));
     },
   );
 

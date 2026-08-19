@@ -48,6 +48,12 @@ import type { Action } from '../auth/rbac';
 import { AUTH_RATE_LIMIT } from '../http/security';
 import type { EventBus } from '../infra/events';
 import { governanceRoute } from '../governance/middleware';
+import {
+  maskLeadResponse,
+  maskLeadsResponse,
+  resolveAccessLevel,
+  type PiiAccessLevel,
+} from '../governance/responseMasking';
 
 export interface RouteDeps {
   prisma: PrismaClient;
@@ -204,7 +210,8 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     async (request, reply) => {
       const actor = getAuth(request);
       const lead = await leadService.create((request.body ?? {}) as CreateLeadInput, actor);
-      return reply.code(201).send(lead);
+      const level = resolveAccessLevel(actor.role);
+      return reply.code(201).send(maskLeadResponse(lead as Record<string, unknown>, level));
     },
   );
 
@@ -226,7 +233,13 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
         asInt(q.limit, 20),
         actor,
       );
-      return reply.code(200).send(result);
+      // Apply PII masking to list items.
+      const level = resolveAccessLevel(actor.role);
+      const safeResult = {
+        ...result,
+        items: maskLeadsResponse((result.items ?? []) as Record<string, unknown>[], level),
+      };
+      return reply.code(200).send(safeResult);
     },
   );
 
@@ -268,12 +281,13 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
 
   app.get(
     '/api/leads/:id',
-    { preHandler: [auth, leadTargetById('read')] },
+    { ...governanceRoute({ audit: true }), preHandler: [auth, leadTargetById('read')] },
     async (request, reply) => {
       const actor = getAuth(request);
       const { id } = request.params as IdParams;
       const lead = await leadService.get(id, actor);
-      return reply.code(200).send(lead);
+      const level = resolveAccessLevel(actor.role);
+      return reply.code(200).send(maskLeadResponse(lead as Record<string, unknown>, level));
     },
   );
 
@@ -298,7 +312,8 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
       const actor = getAuth(request);
       const { id } = request.params as IdParams;
       const lead = await leadService.update(id, (request.body ?? {}) as UpdateLeadInput, actor);
-      return reply.code(200).send(lead);
+      const level = resolveAccessLevel(actor.role);
+      return reply.code(200).send(maskLeadResponse(lead as Record<string, unknown>, level));
     },
   );
 
