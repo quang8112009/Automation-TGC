@@ -92,3 +92,28 @@ export {
   type ProtectionReport,
   type ScanOptions,
 } from './protection';
+
+// ── Middleware ──────────────────────────────────────────────────────────────
+export {
+  registerGovernance,
+  governanceRoute,
+  maskErrorBody,
+  type RequestGovernance,
+  type GovernanceConfig,
+  type RouteGovernanceOptions,
+} from './middleware';
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+export { ComplianceDashboard } from './dashboard';
+export type {
+  AuditSummary,
+  PiiExposureReport,
+  RetentionStatus,
+  ConsentOverview,
+  ProtectionSummary,
+  DsarSummary,
+  ComplianceDashboardOverview,
+} from './dashboard';
+
+// ── Routes ─────────────────────────────────────────────────────────────────
+export { registerGovernanceRoutes } from './routes';
