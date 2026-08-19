@@ -20,6 +20,7 @@ import { getAuth, rbacGuard, requireAuth } from '../http/authMiddleware';
 import type { RbacAuditor } from '../http/authMiddleware';
 import { ComplianceDashboard } from './dashboard';
 import { getComplianceMetrics } from './metrics';
+import { exportComplianceCSV, exportCompliancePDF, type CSVSection } from './export';
 
 export interface GovernanceRouteDeps {
   prisma: PrismaClient;
@@ -189,6 +190,41 @@ export function registerGovernanceRoutes(app: FastifyInstance, deps: GovernanceR
       const body = await metrics.getMetrics();
       reply.header('Content-Type', metrics.getContentType());
       return reply.code(200).send(body);
+    },
+  );
+
+  // ── Export endpoints ──────────────────────────────────────────────────
+
+  // GET /api/v1/governance/export/csv — Export compliance report as CSV.
+  app.get(
+    '/api/v1/governance/export/csv',
+    { preHandler: [auth, readGuard] },
+    async (request, reply) => {
+      const q = (request.query ?? {}) as Record<string, unknown>;
+      const range = parseTimeRange(q);
+      const section = (typeof q.section === 'string' ? q.section : 'all') as CSVSection;
+      const overview = await dashboard.getOverview(range);
+      const alerts = await alerter.getAlertHistory({ limit: 50 });
+      const result = exportComplianceCSV(overview, section, alerts);
+      reply.header('Content-Type', result.mimeType);
+      reply.header('Content-Disposition', `attachment; filename="${result.filename}"`);
+      return reply.code(200).send(result.content);
+    },
+  );
+
+  // GET /api/v1/governance/export/pdf — Export compliance report as PDF.
+  app.get(
+    '/api/v1/governance/export/pdf',
+    { preHandler: [auth, readGuard] },
+    async (request, reply) => {
+      const q = (request.query ?? {}) as Record<string, unknown>;
+      const range = parseTimeRange(q);
+      const overview = await dashboard.getOverview(range);
+      const alerts = await alerter.getAlertHistory({ limit: 50 });
+      const result = await exportCompliancePDF(overview, alerts);
+      reply.header('Content-Type', result.mimeType);
+      reply.header('Content-Disposition', `attachment; filename="${result.filename}"`);
+      return reply.code(200).send(result.content);
     },
   );
 }

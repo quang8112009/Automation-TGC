@@ -150,3 +150,12 @@ export {
   type FieldMaskRule,
   type ResourceMaskConfig,
 } from './responseMasking';
+
+// ── Export ──────────────────────────────────────────────────────────────────
+export {
+  exportComplianceCSV,
+  exportCompliancePDF,
+  type ExportResult,
+  type ExportFormat,
+  type CSVSection,
+} from './export';
